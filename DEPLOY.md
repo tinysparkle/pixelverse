@@ -76,11 +76,21 @@ FLUSH PRIVILEGES;
 切到部署目录：
 
 ```bash
-sudo mkdir -p /opt/pixelverse/app
-sudo chown -R pixelverse:pixelverse /opt/pixelverse
+sudo mkdir -p /opt/projects/pixelverse
+sudo mkdir -p /opt/projects/pixelverse-data
+
+sudo chown -R pixelverse:pixelverse /opt/projects/pixelverse
+sudo chown -R pixelverse:pixelverse /opt/projects/pixelverse-data
+
 sudo -u pixelverse -H bash
-cd /opt/pixelverse/app
-git clone <你的仓库地址> .
+cd /opt/projects
+
+git clone <你的仓库地址> pixelverse
+cd pixelverse
+
+mkdir -p ../pixelverse-data/uploads
+rm -rf public/uploads
+ln -s ../pixelverse-data/uploads public/uploads
 ```
 
 安装依赖：
