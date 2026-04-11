@@ -1,26 +1,68 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-pixel: var(--font-pixel);
+  --font-serif: var(--font-serif-sc);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+:root {
+  --bg: #0a0a0a;
+  --bg-soft: #141414;
+  --panel: #1f1f1f;
+  --panel-strong: #2f2f2f;
+  --panel-elevated: #383838;
+  --ink: #ffffff;
+  --ink-soft: #d4d4d4;
+  --ink-dim: #9f9f9f;
+  --ink-on-accent: #120907;
+  --accent: #ff3c28;
+  --accent-soft: #ffd54f;
+  --success: #00c853;
+  --line: #000000;
+  --line-strong: #000000;
+  --shadow: 0 22px 56px rgba(0, 0, 0, 0.45);
+  --pixel: 4px;
 }
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+  font-family: var(--font-serif-sc), "Noto Serif SC", serif;
+  background:
+    radial-gradient(circle at 14% 18%, rgba(255, 213, 79, 0.12), transparent 22%),
+    radial-gradient(circle at 82% 10%, rgba(255, 60, 40, 0.16), transparent 24%),
+    radial-gradient(circle at 55% 85%, rgba(255, 60, 40, 0.08), transparent 22%),
+    linear-gradient(180deg, #131313 0%, #0a0a0a 48%, #050505 100%);
+  overflow-x: hidden;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 18px 18px;
+  opacity: 0.24;
+  z-index: -1;
+}
+
+a { color: inherit; text-decoration: none; }
+h1, h2, h3, p { margin: 0; }
+::selection {
+  background: rgba(255, 213, 79, 0.35);
+  color: var(--ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }
