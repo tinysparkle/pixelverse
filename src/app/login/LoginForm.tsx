@@ -38,7 +38,12 @@ export default function LoginForm() {
 
   return (
     <main className={styles.page}>
+      {/* Decorative pixel grid corners */}
+      <div className={styles.gridCorner} aria-hidden="true" />
+
       <div className={styles.card}>
+        <div className={styles.cardGlow} aria-hidden="true" />
+
         <div className={styles.header}>
           <Link className={styles.brand} href="/">
             <strong>Pixelverse</strong>
@@ -46,7 +51,10 @@ export default function LoginForm() {
           <h1>登录</h1>
           <p>登录后回到首页，继续进入你的工作区。</p>
           {isDev ? (
-            <p className={styles.devHint}>本地开发默认账号：admin / 123456</p>
+            <p className={styles.devHint}>
+              <span className={styles.devDot} />
+              本地开发默认账号：admin / 123456
+            </p>
           ) : null}
         </div>
 

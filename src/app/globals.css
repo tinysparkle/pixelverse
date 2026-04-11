@@ -7,20 +7,23 @@
 
 :root {
   --bg: #0a0a0a;
-  --bg-soft: #141414;
-  --panel: #1f1f1f;
-  --panel-strong: #2f2f2f;
-  --panel-elevated: #383838;
-  --ink: #ffffff;
-  --ink-soft: #d4d4d4;
-  --ink-dim: #9f9f9f;
+  --bg-soft: #111111;
+  --panel: #1a1a1a;
+  --panel-strong: #252525;
+  --panel-elevated: #333333;
+  --ink: #f0ece8;
+  --ink-soft: #c8c4c0;
+  --ink-dim: #807a76;
   --ink-on-accent: #120907;
   --accent: #ff3c28;
+  --accent-glow: rgba(255, 60, 40, 0.35);
   --accent-soft: #ffd54f;
+  --accent-soft-glow: rgba(255, 213, 79, 0.25);
   --success: #00c853;
-  --line: #000000;
-  --line-strong: #000000;
-  --shadow: 0 22px 56px rgba(0, 0, 0, 0.45);
+  --line: rgba(255, 255, 255, 0.06);
+  --line-strong: rgba(255, 255, 255, 0.10);
+  --shadow: 0 22px 56px rgba(0, 0, 0, 0.55);
+  --shadow-accent: 0 4px 32px rgba(255, 60, 40, 0.12);
   --pixel: 4px;
 }
 
@@ -32,32 +35,109 @@ body {
   min-height: 100vh;
   color: var(--ink);
   font-family: var(--font-serif-sc), "Noto Serif SC", serif;
-  background:
-    radial-gradient(circle at 14% 18%, rgba(255, 213, 79, 0.12), transparent 22%),
-    radial-gradient(circle at 82% 10%, rgba(255, 60, 40, 0.16), transparent 24%),
-    radial-gradient(circle at 55% 85%, rgba(255, 60, 40, 0.08), transparent 22%),
-    linear-gradient(180deg, #131313 0%, #0a0a0a 48%, #050505 100%);
+  background: var(--bg);
   overflow-x: hidden;
 }
 
+/* ── Layered background atmosphere ── */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   pointer-events: none;
+  z-index: -2;
   background:
-    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
-  background-size: 18px 18px;
-  opacity: 0.24;
+    radial-gradient(ellipse 600px 400px at 12% 15%, rgba(255, 213, 79, 0.07), transparent),
+    radial-gradient(ellipse 500px 500px at 85% 8%, rgba(255, 60, 40, 0.09), transparent),
+    radial-gradient(ellipse 700px 400px at 50% 90%, rgba(255, 60, 40, 0.05), transparent),
+    radial-gradient(ellipse 300px 300px at 70% 50%, rgba(255, 213, 79, 0.03), transparent),
+    linear-gradient(180deg, #0e0e0e 0%, #0a0a0a 40%, #060606 100%);
+}
+
+/* ── Pixel grid overlay ── */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
   z-index: -1;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+  background-size: 16px 16px;
+  opacity: 0.6;
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 40%, black 20%, transparent 70%);
 }
 
 a { color: inherit; text-decoration: none; }
 h1, h2, h3, p { margin: 0; }
+
 ::selection {
-  background: rgba(255, 213, 79, 0.35);
+  background: rgba(255, 213, 79, 0.30);
   color: var(--ink);
+}
+
+/* ── Global entrance animation ── */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes glowPulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+@keyframes subtleFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+/* ── Scanline effect (opt-in via class) ── */
+.scanlines::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.03) 2px,
+    rgba(0, 0, 0, 0.03) 4px
+  );
+  opacity: 0.4;
+}
+
+/* ── Scrollbar styling ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--panel-strong);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--panel-elevated);
 }
 
 @media (prefers-reduced-motion: reduce) {

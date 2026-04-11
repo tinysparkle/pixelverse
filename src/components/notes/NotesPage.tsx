@@ -104,8 +104,12 @@ export default function NotesPage() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dirtyRef = useRef(false);
+  const activeIdRef = useRef<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── 关键修复：用 ref 保存最新的 saveNote，打破闭包链 ──
+  const saveNoteRef = useRef<() => Promise<void>>(async () => {});
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -114,10 +118,12 @@ export default function NotesPage() {
       Placeholder.configure({ placeholder: "开始记录你的想法..." }),
       Image.configure({ inline: false, allowBase64: false }),
     ],
+    // 关键修复：onUpdate 通过 ref 调用 saveNote，永远是最新的
     onUpdate: () => {
       dirtyRef.current = true;
       setSaveState("dirty");
-      debounceSave();
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = setTimeout(() => saveNoteRef.current(), 800);
     },
     editorProps: {
       handlePaste: (_view, event) => {
@@ -181,44 +187,23 @@ export default function NotesPage() {
   // 拉取笔记列表
   const fetchList = useCallback(async (query?: string) => {
     const url = query ? `/api/notes?query=${encodeURIComponent(query)}` : "/api/notes";
-    const res = await fetch(url);
-    if (res.ok) {
-      const data = await res.json();
-      setNotesList(data);
-      return data as NoteItem[];
-    }
-
-    if (res.status === 401) {
-      router.push("/login");
-    }
-
-    return [];
-  }, [router]);
-
-  // 拉取单篇笔记
-  const fetchNote = useCallback(
-    async (id: string) => {
-      const res = await fetch(`/api/notes/${id}`);
+    try {
+      const res = await fetch(url);
       if (res.ok) {
-        const data: NoteDetail = await res.json();
-        setActiveNote(data);
-        setTitle(data.title);
-        dirtyRef.current = false;
-        setSaveState("saved");
-        return;
+        const data = await res.json();
+        setNotesList(data);
+        return data as NoteItem[];
       }
-
       if (res.status === 401) {
         router.push("/login");
       }
-    },
-    [router]
-  );
+    } catch { /* 网络异常 */ }
+    return [];
+  }, [router]);
 
+  // 编辑器同步 activeNote 内容
   useEffect(() => {
-    if (!editor) {
-      return;
-    }
+    if (!editor) return;
 
     if (!activeNote) {
       editor.commands.setContent("", { emitUpdate: false });
@@ -237,11 +222,12 @@ export default function NotesPage() {
 
   // 保存当前笔记
   const saveNote = useCallback(async () => {
-    if (!activeId || !editor || !dirtyRef.current) return;
+    const currentId = activeIdRef.current;
+    if (!currentId || !editor || !dirtyRef.current) return;
 
     setSaveState("saving");
     try {
-      const res = await fetch(`/api/notes/${activeId}`, {
+      const res = await fetch(`/api/notes/${currentId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -260,22 +246,19 @@ export default function NotesPage() {
     } catch {
       setSaveState("error");
     }
-  }, [activeId, editor, title, searchQuery, fetchList]);
+  }, [editor, title, searchQuery, fetchList]);
 
-  // 防抖保存
-  const debounceSave = useCallback(() => {
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => saveNote(), 800);
-  }, [saveNote]);
+  // 关键修复：每次 saveNote 更新后同步到 ref
+  useEffect(() => { saveNoteRef.current = saveNote; }, [saveNote]);
 
   // 页面失焦时立即保存
   useEffect(() => {
     const handleBlur = () => {
-      if (dirtyRef.current) saveNote();
+      if (dirtyRef.current) saveNoteRef.current();
     };
     window.addEventListener("blur", handleBlur);
     return () => window.removeEventListener("blur", handleBlur);
-  }, [saveNote]);
+  }, []);
 
   // 初始化加载
   useEffect(() => {
@@ -286,43 +269,68 @@ export default function NotesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 切换笔记
+  // 关键修复：切换笔记 — 内联 fetch，加容错
   const switchNote = async (id: string) => {
     if (id === activeId) return;
-    if (dirtyRef.current) await saveNote();
+    if (dirtyRef.current && activeIdRef.current) await saveNoteRef.current();
     setActiveId(id);
-    await fetchNote(id);
+    activeIdRef.current = id;
+    try {
+      const res = await fetch(`/api/notes/${id}`);
+      if (res.ok) {
+        const data: NoteDetail = await res.json();
+        setActiveNote(data);
+        setTitle(data.title);
+        dirtyRef.current = false;
+        setSaveState("saved");
+      } else if (res.status === 401) {
+        router.push("/login");
+      }
+    } catch { /* 网络异常 */ }
   };
 
-  // 新建笔记
+  // 关键修复：新建笔记 — 直接用 POST 响应设置 activeNote，不做二次 fetch
   const createNote = async () => {
-    if (dirtyRef.current) await saveNote();
-    const res = await fetch("/api/notes", { method: "POST" });
-    if (res.ok) {
-      const note = await res.json();
-      const list = await fetchList();
-      setActiveId(note.id);
-      await fetchNote(note.id);
-      if (list.length === 0) setNotesList([note]);
-      return;
-    }
-
-    if (res.status === 401) {
-      router.push("/login");
-    }
+    if (dirtyRef.current && activeIdRef.current) await saveNoteRef.current();
+    try {
+      const res = await fetch("/api/notes", { method: "POST" });
+      if (res.ok) {
+        const note = await res.json();
+        setActiveId(note.id);
+        activeIdRef.current = note.id;
+        setActiveNote({
+          id: note.id,
+          title: note.title,
+          contentJson: note.contentJson,
+          contentText: note.contentText,
+          updatedAt: note.updatedAt,
+        });
+        setTitle(note.title);
+        dirtyRef.current = false;
+        setSaveState("saved");
+        fetchList(searchQuery || undefined);
+        return;
+      }
+      if (res.status === 401) {
+        router.push("/login");
+      }
+    } catch { /* 网络异常 */ }
   };
 
   // 删除笔记
   const deleteNote = async (id: string) => {
-    const res = await fetch(`/api/notes/${id}`, { method: "DELETE" });
-    if (res.ok) {
-      await fetchList(searchQuery || undefined);
-      setActiveId(null);
-      setActiveNote(null);
-      setTitle("");
-      editor?.commands.setContent("", { emitUpdate: false });
-      setPendingDelete(null);
-    }
+    try {
+      const res = await fetch(`/api/notes/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        await fetchList(searchQuery || undefined);
+        setActiveId(null);
+        activeIdRef.current = null;
+        setActiveNote(null);
+        setTitle("");
+        editor?.commands.setContent("", { emitUpdate: false });
+        setPendingDelete(null);
+      }
+    } catch { /* 网络异常 */ }
   };
 
   // 搜索
@@ -331,12 +339,13 @@ export default function NotesPage() {
     fetchList(q || undefined);
   };
 
-  // 标题变更触发保存
+  // 标题变更触发保存 — 通过 ref 防抖
   const handleTitleChange = (val: string) => {
     setTitle(val);
     dirtyRef.current = true;
     setSaveState("dirty");
-    debounceSave();
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => saveNoteRef.current(), 800);
   };
 
   const saveLabel = {
@@ -515,7 +524,7 @@ export default function NotesPage() {
             <span className={styles.modalTag}>Danger Zone</span>
             <h3 id="delete-note-title">删除这篇笔记？</h3>
             <p>
-              这会把“{pendingDelete.title || "无标题笔记"}”移出当前列表。
+              这会把"{pendingDelete.title || "无标题笔记"}"移出当前列表。
               删除后不会自动帮你恢复。
             </p>
             <div className={styles.modalActions}>
