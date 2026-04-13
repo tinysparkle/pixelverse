@@ -4,205 +4,364 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import styles from "./pet.module.css";
 
 /*
- * 像素幽灵 — Pixelverse 吉祥物
- * 半透明发光体，红色像素眼，暖黄辉光
- * 悬浮飘动，和深色宇宙主题天然融合
+ * 像素小猫 — 底部行走
+ * 水平侧面猫：头在右，身体横向展开，尾巴在左
+ * 只在屏幕底部移动，平滑步行，自然行为循环
  */
 
-type Activity = "idle" | "float" | "sleep";
+type Pose = "idle" | "walk1" | "walk2" | "sit" | "lick" | "sleep" | "happy";
+
+// 水平侧面猫 — 20 列 x 12 行
+// 1=outline 2=fur 3=stripe 4=earInner 5=eye 6=cheek 7=nose
+// 8=tail 9=happyEye A=white B=mouth C=whisker
+const SPRITE: Record<Pose, string> = {
+  idle: `
+    .............11.11..
+    ............1441441.
+    ...........122222221
+    .888......1222222221
+    .8881111..12A52A5C21
+    ..12222111122672621.
+    ..122333222222BB221.
+    ..12222222222222221.
+    ...122222222222221..
+    ...12222222222221...
+    ...1..1.....1..1....
+    ...11.......11......
+  `,
+  walk1: `
+    .............11.11..
+    ............1441441.
+    ...........122222221
+    .888......1222222221
+    .8881111..122A55AC21
+    ..12222111122676721.
+    ..122333222222BB221.
+    ..12222222222222221.
+    ...12222222222221...
+    ...1222222222221....
+    ...1..1......11.....
+    ....11.....1..1.....
+  `,
+  walk2: `
+    .............11.11..
+    ............1441441.
+    ...........122222221
+    .888......1222222221
+    .8881111..122A55AC21
+    ..12222111122676721.
+    ..122333222222BB221.
+    ..12222222222222221.
+    ...12222222222221...
+    ...1222222222221....
+    ....11.....1..1.....
+    ...1..1......11.....
+  `,
+  sit: `
+    .............11.11..
+    ............1441441.
+    ...........122222221
+    ..........1222222221
+    .........122A55AC221
+    ..88....11226767221.
+    ..88111122222BB221..
+    ...122222222222221..
+    ...122333222222221..
+    ...1222222222222221.
+    ....12222222112221..
+    .....111111...111...
+  `,
+  lick: `
+    .............11.11..
+    ............1441441.
+    ...........122222221
+    ..........1222222221
+    .........122A55AC221
+    ..88....11226767B21.
+    ..88111122222BB227..
+    ...122222222222221..
+    ...122333222222221..
+    ...1222222222222221.
+    ....12222222112221..
+    .....111111...111...
+  `,
+  sleep: `
+    ....................
+    .............11.11..
+    ............1441441.
+    ...........122222221
+    ..88......1222222221
+    ..88111...1221991C21
+    ...1222111122676B21.
+    ...1223332222222221.
+    ...1222222222222221.
+    ...12222222222222221
+    ....12222222212221..
+    .....11111111111....
+  `,
+  happy: `
+    .............11.11..
+    ............1441441.
+    ...........122222221
+    .888......1222222221
+    .8881111..1229999C21
+    ..12222111122676721.
+    ..122333222222BB221.
+    ..12222222222222221.
+    ...12222222222221...
+    ...1222222222221....
+    ...1..1......11.....
+    ....11.....1..1.....
+  `,
+};
+
+const COLOR_MAP: Record<string, string> = {
+  "1": "#3a3535",     // outline
+  "2": "#e8e3e0",     // 浅灰白毛
+  "3": "#c8c0bc",     // 深灰花纹
+  "4": "#c49090",     // 耳内粉褐
+  "5": "#1a1818",     // 眼瞳
+  "6": "#f0b8b8",     // 腮红
+  "7": "#d48888",     // 鼻子
+  "8": "#c8c0bc",     // 尾巴
+  "9": "#d48888",     // 开心眼 (^_^)
+  "A": "#ffffff",     // 眼白
+  "B": "#7c5151",     // 嘴巴
+  "C": "#8b7b7b",     // 胡须
+};
 
 const THOUGHTS = [
-  "嘘...我是幽灵喵",
-  "飘来飘去真自在",
-  "这里好暖和",
+  "喵~ 你好呀",
+  "想吃小鱼干...",
+  "这人在写代码？",
+  "键盘好暖和",
+  "想被摸摸头",
+  "午觉时间到了喵",
   "笔记写好了吗？",
-  "嘿~别怕",
-  "在偷看你写代码",
-  "想吃...等等幽灵要吃东西吗",
-  "今天也辛苦了",
-  "好困...幽灵也会困吗",
-  "喜欢这个角落",
+  "窗外有只鸟！",
+  "喵呜~",
+  "今天也辛苦了喵",
   "..zzZ",
 ];
 
-function GhostSVG({ activity, isHappy }: { activity: Activity; isHappy: boolean }) {
-  const isSleeping = activity === "sleep";
-
-  return (
-    <svg
-      viewBox="0 0 60 68"
-      width={72}
-      height={82}
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      style={{ overflow: "visible" }}
-    >
-      {/* 身体：圆顶 + 波浪下摆 */}
-      <path
-        className={styles.ghostBody}
-        d="M8,34
-           C8,16 18,4 30,4
-           C42,4 52,16 52,34
-           L52,52
-           Q52,58 47,54
-           Q42,50 38,56
-           Q34,62 30,56
-           Q26,50 22,56
-           Q18,62 13,56
-           Q8,50 8,52
-           Z"
-        fill="rgba(240, 236, 232, 0.72)"
-      />
-
-      {/* 眼睛 */}
-      {isSleeping ? (
-        <g stroke="rgba(255, 60, 40, 0.5)" strokeWidth="2" strokeLinecap="round" fill="none">
-          <path d="M19,30 Q22,33 25,30" />
-          <path d="M35,30 Q38,33 41,30" />
-        </g>
-      ) : isHappy ? (
-        <g stroke="#ff3c28" strokeWidth="2.2" strokeLinecap="round" fill="none">
-          <path d="M19,32 Q22,27 25,32" />
-          <path d="M35,32 Q38,27 41,32" />
-        </g>
-      ) : (
-        <g className={styles.ghostEyes}>
-          {/* 左眼：像素方块 */}
-          <rect x="18" y="27" width="8" height="8" rx="1" fill="#ff3c28" />
-          <rect x="22" y="29" width="2.5" height="3" rx="0.5" fill="white" opacity="0.7" />
-          {/* 右眼 */}
-          <rect x="34" y="27" width="8" height="8" rx="1" fill="#ff3c28" />
-          <rect x="38" y="29" width="2.5" height="3" rx="0.5" fill="white" opacity="0.7" />
-        </g>
-      )}
-
-      {/* 嘴巴 */}
-      <path
-        d="M25,40 Q30,44 35,40"
-        stroke="rgba(255, 255, 255, 0.35)"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        fill="none"
-      />
-    </svg>
-  );
+function parseSprite(sprite: string): Array<{ x: number; y: number; color: string }> {
+  const pixels: Array<{ x: number; y: number; color: string }> = [];
+  // 每行单独 trim：外层 trim 只能去掉首尾空白，行内缩进会让第 2 行起被整体右移，
+  // 导致耳朵像素落在 80px 容器之外（bald cat bug）。
+  const lines = sprite
+    .trim()
+    .split("\n")
+    .map((l) => l.trim());
+  for (let y = 0; y < lines.length; y++) {
+    const row = lines[y];
+    for (let x = 0; x < row.length; x++) {
+      const ch = row[x];
+      if (ch !== "." && ch !== " " && COLOR_MAP[ch]) {
+        pixels.push({ x, y, color: COLOR_MAP[ch] });
+      }
+    }
+  }
+  return pixels;
 }
 
-function Sparkle({ delay, offsetX, offsetY }: { delay: number; offsetX: number; offsetY: number }) {
-  return <span className={styles.sparkle} style={{ left: offsetX, top: offsetY, animationDelay: `${delay}s` }} />;
-}
+const PARSED: Record<Pose, ReturnType<typeof parseSprite>> = {
+  idle: parseSprite(SPRITE.idle),
+  walk1: parseSprite(SPRITE.walk1),
+  walk2: parseSprite(SPRITE.walk2),
+  sit: parseSprite(SPRITE.sit),
+  lick: parseSprite(SPRITE.lick),
+  sleep: parseSprite(SPRITE.sleep),
+  happy: parseSprite(SPRITE.happy),
+};
+
+const PX = 4;
+const CAT_W = 23 * PX;
+const CAT_H = 13 * PX;
+
+type Activity = "idle" | "walk" | "sit" | "lick" | "sleep";
 
 export default function PixelCat() {
+  const [pose, setPose] = useState<Pose>("idle");
+  // posX 初始为 null：SSR 与首屏客户端渲染保持一致（都不渲染），
+  // 挂载后再读取 window.innerWidth 设置真实位置，避免 hydration mismatch。
   const [posX, setPosX] = useState<number | null>(null);
   const [facingLeft, setFacingLeft] = useState(false);
   const [activity, setActivity] = useState<Activity>("idle");
   const [thought, setThought] = useState<string | null>(null);
   const [isHappy, setIsHappy] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
-  const [showSparkles, setShowSparkles] = useState(false);
 
   const activityRef = useRef<Activity>("idle");
-  const GHOST_W = 72;
+  const posXRef = useRef<number | null>(posX);
+  posXRef.current = posX;
 
-  useEffect(() => { setPosX(Math.floor(window.innerWidth * 0.65)); }, []);
-
-  // 飘动
+  // 挂载后初始化位置
   useEffect(() => {
-    if (activity !== "float") return;
+    setPosX(Math.floor(window.innerWidth * 0.65));
+  }, []);
+
+  // 行走动画 — 逐帧步行，不瞬移
+  useEffect(() => {
+    if (activity !== "walk") return;
+
+    let frame = 0;
     const interval = setInterval(() => {
-      setPosX((prev) => {
+      frame++;
+      setPose(isHappy ? "happy" : frame % 2 === 0 ? "walk1" : "walk2");
+
+      setPosX((prev: number | null) => {
         if (prev == null) return prev;
-        const maxX = window.innerWidth - GHOST_W - 16;
-        const step = facingLeft ? -1.5 : 1.5;
+        const maxX = window.innerWidth - CAT_W - 16;
+        const step = facingLeft ? -4 : 4;
         const next = prev + step;
-        if (next <= 16) { setFacingLeft(false); return 16; }
-        if (next >= maxX) { setFacingLeft(true); return maxX; }
+
+        if (next <= 16) {
+          setFacingLeft(false);
+          return 16;
+        }
+        if (next >= maxX) {
+          setFacingLeft(true);
+          return maxX;
+        }
         return next;
       });
-    }, 40);
-    return () => clearInterval(interval);
-  }, [activity, facingLeft]);
+    }, 220);
 
-  // 活动调度
+    return () => clearInterval(interval);
+  }, [activity, facingLeft, isHappy]);
+
+  // idle 时微微晃动尾巴（通过交替 idle 帧）
+  useEffect(() => {
+    if (activity !== "idle") return;
+    setPose("idle");
+  }, [activity]);
+
+  // 活动调度器 — 自然行为循环
   useEffect(() => {
     const schedule: Array<{ act: Activity; dur: [number, number] }> = [
       { act: "idle", dur: [3000, 5000] },
-      { act: "float", dur: [8000, 14000] },
-      { act: "idle", dur: [4000, 6000] },
-      { act: "float", dur: [6000, 10000] },
-      { act: "idle", dur: [3000, 5000] },
-      { act: "sleep", dur: [8000, 14000] },
+      { act: "walk", dur: [6000, 10000] },
+      { act: "sit", dur: [4000, 6000] },
       { act: "idle", dur: [2000, 4000] },
-      { act: "float", dur: [7000, 12000] },
+      { act: "walk", dur: [5000, 8000] },
+      { act: "lick", dur: [3000, 5000] },
+      { act: "idle", dur: [3000, 5000] },
+      { act: "walk", dur: [4000, 7000] },
+      { act: "sit", dur: [3000, 4000] },
+      { act: "sleep", dur: [8000, 14000] },
     ];
     let idx = 0;
     let timerId: ReturnType<typeof setTimeout>;
+
     const next = () => {
       const { act, dur } = schedule[idx % schedule.length];
       idx++;
       setActivity(act);
       activityRef.current = act;
-      timerId = setTimeout(next, dur[0] + Math.random() * (dur[1] - dur[0]));
+
+      switch (act) {
+        case "idle": setPose("idle"); break;
+        case "walk": setPose("walk1"); break;
+        case "sit": setPose("sit"); break;
+        case "lick": setPose("lick"); break;
+        case "sleep": setPose("sleep"); break;
+      }
+
+      const duration = dur[0] + Math.random() * (dur[1] - dur[0]);
+      timerId = setTimeout(next, duration);
     };
-    timerId = setTimeout(next, 2000);
+
+    timerId = setTimeout(next, 2500);
     return () => clearTimeout(timerId);
   }, []);
 
   // 思考气泡
   useEffect(() => {
     let timerId: ReturnType<typeof setTimeout>;
+
     const show = () => {
-      if (activityRef.current === "sleep") { timerId = setTimeout(show, 12000 + Math.random() * 8000); return; }
-      setThought(THOUGHTS[Math.floor(Math.random() * THOUGHTS.length)]);
+      if (activityRef.current === "sleep") {
+        timerId = setTimeout(show, 10000 + Math.random() * 10000);
+        return;
+      }
+      const text = THOUGHTS[Math.floor(Math.random() * THOUGHTS.length)];
+      setThought(text);
       setTimeout(() => setThought(null), 3500);
       timerId = setTimeout(show, 15000 + Math.random() * 20000);
     };
-    timerId = setTimeout(show, 6000 + Math.random() * 6000);
+
+    timerId = setTimeout(show, 8000 + Math.random() * 6000);
     return () => clearTimeout(timerId);
   }, []);
 
+  // 点击开心
   const handleClick = useCallback(() => {
     setIsHappy(true);
-    setThought("被发现了！");
-    setShowSparkles(true);
-    setTimeout(() => { setIsHappy(false); setThought(null); setShowSparkles(false); }, 2800);
+    setPose("happy");
+    setThought("喵！摸到我了~");
+    setTimeout(() => {
+      setIsHappy(false);
+      setThought(null);
+    }, 2800);
   }, []);
 
-  if (posX == null) return null;
+  const currentPixels: Array<{ x: number; y: number; color: string }> = isHappy
+    ? PARSED.happy
+    : PARSED[pose];
 
-  const actClass = activity === "float" ? styles.floating
-    : activity === "sleep" ? styles.sleeping
-    : styles.idling;
+  // 挂载前不渲染，确保 SSR 输出与首屏客户端 HTML 一致
+  if (posX == null) return null;
 
   return (
     <div
-      className={`${styles.ghostWrap} ${actClass} ${isHovered ? styles.hovered : ""} ${isHappy ? styles.happy : ""}`}
-      style={{ position: "fixed", bottom: 10, left: posX, zIndex: 9990 }}
+      className={styles.catWrap}
+      style={{
+        position: "fixed",
+        bottom: 6,
+        left: posX,
+        zIndex: 9990,
+      }}
       onClick={handleClick}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
       role="img"
-      aria-label="像素幽灵"
+      aria-label="像素小猫"
     >
-      {showSparkles && (
-        <div className={styles.sparkles} aria-hidden="true">
-          <Sparkle delay={0} offsetX={8} offsetY={-4} />
-          <Sparkle delay={0.1} offsetX={38} offsetY={-12} />
-          <Sparkle delay={0.2} offsetX={62} offsetY={-2} />
-          <Sparkle delay={0.06} offsetX={24} offsetY={-16} />
-          <Sparkle delay={0.16} offsetX={52} offsetY={-8} />
+      {/* 思考气泡 */}
+      {thought && (
+        <div className={styles.bubble}>
+          <span>{thought}</span>
+          <div className={styles.bubbleTail} />
         </div>
       )}
 
-      {thought && (
-        <div className={styles.bubble}><span>{thought}</span><div className={styles.bubbleTail} /></div>
-      )}
-
+      {/* Zzz */}
       {activity === "sleep" && !isHappy && (
-        <div className={styles.zzz}><span>z</span><span>Z</span><span>Z</span></div>
+        <div className={styles.zzz}>
+          <span>z</span><span>Z</span><span>Z</span>
+        </div>
       )}
 
-      <GhostSVG activity={activity} isHappy={isHappy} />
+      {/* 像素猫身体 */}
+      <div
+        className={styles.cat}
+        style={{
+          transform: facingLeft ? "scaleX(-1)" : "none",
+          width: CAT_W,
+          height: CAT_H,
+        }}
+      >
+        {currentPixels.map((p: { x: number; y: number; color: string }, i: number) => (
+          <span
+            key={i}
+            className={styles.pixel}
+            style={{
+              left: p.x * PX,
+              top: p.y * PX,
+              width: PX,
+              height: PX,
+              background: p.color,
+            }}
+          />
+        ))}
+      </div>
     </div>
   );
 }

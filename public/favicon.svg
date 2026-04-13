@@ -1,30 +1,22 @@
-<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
-  <!-- 背景 -->
-  <rect width="32" height="32" fill="#1a1a2e"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <defs>
+    <filter id="cellGlow" x="-5%" y="-5%" width="110%" height="110%">
+      <feFlood flood-color="#87CEEB" flood-opacity="0.5" result="glowColor"/>
+      <feComposite in="glowColor" in2="SourceGraphic" operator="in" result="maskedGlow"/>
+      <feMerge>
+        <feMergeNode in="maskedGlow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
   
-  <!-- 像素块组成的"P"形状（代表 Pixelverse）-->
-  <!-- 左边竖列 -->
-  <rect x="6" y="4" width="4" height="4" fill="#00d9ff"/>
-  <rect x="6" y="8" width="4" height="4" fill="#00d9ff"/>
-  <rect x="6" y="12" width="4" height="4" fill="#00d9ff"/>
-  <rect x="6" y="16" width="4" height="4" fill="#00d9ff"/>
-  <rect x="6" y="20" width="4" height="4" fill="#00d9ff"/>
-  <rect x="6" y="24" width="4" height="4" fill="#00d9ff"/>
+  <rect width="32" height="32" fill="#0A0F14" rx="4"/>
   
-  <!-- P 的上方横条 -->
-  <rect x="10" y="4" width="4" height="4" fill="#00d9ff"/>
-  <rect x="14" y="4" width="4" height="4" fill="#00d9ff"/>
-  <rect x="10" y="8" width="4" height="4" fill="#00d9ff"/>
-  
-  <!-- P 的中间竖条 -->
-  <rect x="18" y="4" width="4" height="4" fill="#00d9ff"/>
-  <rect x="18" y="8" width="4" height="4" fill="#00d9ff"/>
-  <rect x="18" y="12" width="4" height="4" fill="#00d9ff"/>
-  
-  <!-- 星星装饰（代表宇宙） -->
-  <rect x="22" y="2" width="2" height="2" fill="#ffff00"/>
-  <rect x="28" y="6" width="2" height="2" fill="#ff69b4"/>
-  <rect x="24" y="18" width="2" height="2" fill="#00ff88"/>
-  <rect x="20" y="26" width="2" height="2" fill="#ffff00"/>
-  <rect x="28" y="24" width="2" height="2" fill="#ff69b4"/>
+  <g transform="translate(6, 4)" filter="url(#cellGlow)">
+    <rect width="6" height="24" rx="1" fill="#87CEEB" />
+    
+    <path d="M6 0 H14 C18 0 20 2 20 6 V10 C20 14 18 16 14 16 H6 V0 Z" fill="#87CEEB" />
+    
+    <rect x="6" y="5" width="8" height="6" rx="1" fill="#0A0F14" />
+  </g>
 </svg>

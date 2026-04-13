@@ -1,161 +1,89 @@
-/* ── 像素幽灵 ── */
-
-/* ─ 容器 ─ */
-.ghostWrap {
+/* ── 像素小猫 ── */
+.catWrap {
   cursor: pointer;
   user-select: none;
   pointer-events: auto;
-  filter: drop-shadow(0 0 12px rgba(255, 213, 79, 0.15));
-  transition: filter 0.4s ease, opacity 0.5s ease;
 }
 
-.hovered {
-  filter: drop-shadow(0 0 18px rgba(255, 213, 79, 0.3));
+.cat {
+  position: relative;
+  width: 92px; /* 23 * 4px - 扩大容器确保耳朵完整显示 */
+  height: 52px; /* 13 * 4px */
+  transition: transform 0.1s ease;
+  overflow: visible;
 }
 
-.happy {
-  filter: drop-shadow(0 0 20px rgba(255, 60, 40, 0.35));
-}
-
-/* ─ 状态动画 ─ */
-.idling {
-  animation: bob 2.2s ease-in-out infinite;
-}
-
-.floating {
-  animation: bob 1.6s ease-in-out infinite;
-}
-
-.sleeping {
-  opacity: 0.55;
-  animation: bobSlow 3s ease-in-out infinite;
-}
-
-@keyframes bob {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-5px); }
-}
-
-@keyframes bobSlow {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-2px); }
-}
-
-/* ─ 身体：下摆飘动 ─ */
-.ghostBody {
-  animation: waver 3s ease-in-out infinite;
-  transform-origin: 30px 40px;
-}
-
-@keyframes waver {
-  0%, 100% { transform: scaleX(1); }
-  50% { transform: scaleX(1.02); }
-}
-
-/* ─ 眼睛：呼吸辉光 ─ */
-.ghostEyes rect:nth-child(odd) {
-  animation: eyeGlow 2.5s ease-in-out infinite;
-}
-
-@keyframes eyeGlow {
-  0%, 100% { opacity: 0.85; }
-  50% { opacity: 1; }
-}
-
-/* ─ Sparkle ─ */
-.sparkles { position: absolute; inset: 0; pointer-events: none; }
-
-.sparkle {
+.pixel {
   position: absolute;
-  width: 4px;
-  height: 4px;
-  border-radius: 1px;
-  background: var(--accent-soft, #ffd54f);
-  box-shadow: 0 0 6px rgba(255, 213, 79, 0.7);
-  animation: sparkleUp 0.8s ease forwards;
+  image-rendering: pixelated;
 }
 
-.sparkle:nth-child(2n) {
-  background: var(--accent, #ff3c28);
-  box-shadow: 0 0 5px rgba(255, 60, 40, 0.6);
-}
-
-.sparkle:nth-child(3n) { width: 3px; height: 3px; }
-
-@keyframes sparkleUp {
-  0% { opacity: 1; transform: translateY(0) scale(1); }
-  60% { opacity: 1; }
-  100% { opacity: 0; transform: translateY(-20px) scale(0.15); }
-}
-
-/* ─ 气泡 ─ */
+/* 思考气泡 */
 .bubble {
   position: absolute;
-  bottom: calc(100% + 6px);
+  bottom: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%);
-  background: var(--panel-strong, #252525);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--panel-strong, rgba(246, 244, 244, 0.94));
+  border: 2px solid var(--line, rgba(80, 64, 64, 0.22));
   border-radius: 10px;
-  padding: 6px 12px;
+  padding: 5px 10px;
   font-family: var(--font-serif-sc, serif);
-  font-size: 0.8rem;
-  color: var(--ink-soft, #c8c4c0);
+  font-size: 0.72rem;
+  color: var(--ink-soft, #d4d4d4);
   white-space: nowrap;
-  animation: bubbleIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: catBubbleIn 0.25s ease;
   pointer-events: none;
   z-index: 10;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
 }
 
 .bubbleTail {
   position: absolute;
-  bottom: -5px;
+  bottom: -6px;
   left: 50%;
   transform: translateX(-50%);
   width: 8px;
-  height: 5px;
-  background: var(--panel-strong, #252525);
+  height: 6px;
+  background: var(--panel-strong, rgba(246, 244, 244, 0.94));
   clip-path: polygon(0 0, 100% 0, 50% 100%);
+  border-bottom: 1px solid var(--line, rgba(80, 64, 64, 0.22));
 }
 
-@keyframes bubbleIn {
-  from { opacity: 0; transform: translateX(-50%) translateY(6px) scale(0.9); }
-  to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
-}
-
-/* ─ Zzz ─ */
+/* Zzz */
 .zzz {
   position: absolute;
-  bottom: calc(100% + 2px);
-  right: -4px;
+  bottom: calc(100% + 4px);
+  right: -6px;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 2px;
+  gap: 1px;
   pointer-events: none;
 }
 
 .zzz span {
   font-family: var(--font-pixel, monospace);
   color: var(--accent-soft, #ffd54f);
-  animation: zzzFloat 2.2s ease-in-out infinite;
-  text-shadow: 0 0 6px rgba(255, 213, 79, 0.2);
+  animation: catZzz 1.8s ease-in-out infinite;
 }
 
-.zzz span:nth-child(1) { font-size: 0.6rem; animation-delay: 0s; opacity: 0.6; }
-.zzz span:nth-child(2) { font-size: 0.72rem; animation-delay: 0.4s; opacity: 0.8; }
-.zzz span:nth-child(3) { font-size: 0.85rem; animation-delay: 0.8s; }
+.zzz span:nth-child(1) { font-size: 0.5rem; animation-delay: 0s; }
+.zzz span:nth-child(2) { font-size: 0.65rem; animation-delay: 0.35s; }
+.zzz span:nth-child(3) { font-size: 0.8rem; animation-delay: 0.7s; }
 
-@keyframes zzzFloat {
-  0% { opacity: 0; transform: translateY(0) translateX(0) scale(0.8); }
-  25% { opacity: 1; transform: translateY(-4px) translateX(2px) scale(1); }
-  100% { opacity: 0; transform: translateY(-14px) translateX(6px) scale(0.5); }
+@keyframes catBubbleIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(4px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes catZzz {
+  0% { opacity: 0; transform: translateY(0) translateX(0); }
+  30% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-12px) translateX(6px); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .ghostWrap, .idling, .floating, .sleeping,
-  .ghostBody, .ghostEyes, .bubble, .zzz span, .sparkle {
+  .catWrap, .bubble, .zzz span {
     animation: none !important;
     transition: none !important;
   }
