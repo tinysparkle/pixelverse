@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { RowDataPacket } from "mysql2/promise";
 import { executeStatement, queryRows, type SqlValue } from "@/lib/db";
-import type { NoteRecord, NoteSummary, UserRecord } from "@/lib/db/types";
+import type { NoteRecord, NoteSummary, DeletedNoteSummary, UserRecord } from "@/lib/db/types";
 
 type UserRow = RowDataPacket & {
 	id: string;
@@ -203,4 +203,54 @@ export async function softDeleteNoteForUser(noteId: string, userId: string) {
 	);
 
 	return result.affectedRows > 0;
+}
+
+export async function getDeletedNotesForUser(userId: string) {
+	const rows = await queryRows<NoteRow[]>(
+		`SELECT id, user_id, title, content_json, content_text, created_at, updated_at, deleted_at
+		 FROM notes
+		 WHERE user_id = ? AND deleted_at IS NOT NULL
+		   AND deleted_at > DATE_SUB(UTC_TIMESTAMP(), INTERVAL 30 DAY)
+		 ORDER BY deleted_at DESC`,
+		[userId]
+	);
+
+	return rows.map((row): DeletedNoteSummary => {
+		const note = mapNote(row);
+		return {
+			id: note.id,
+			title: note.title,
+			excerpt: note.contentText.slice(0, 120),
+			deletedAt: note.deletedAt!,
+			updatedAt: note.updatedAt,
+		};
+	});
+}
+
+export async function restoreNoteForUser(noteId: string, userId: string) {
+	const result = await executeStatement(
+		`UPDATE notes
+		 SET deleted_at = NULL, updated_at = UTC_TIMESTAMP()
+		 WHERE id = ? AND user_id = ? AND deleted_at IS NOT NULL`,
+		[noteId, userId]
+	);
+	return result.affectedRows > 0;
+}
+
+export async function permanentlyDeleteNoteForUser(noteId: string, userId: string) {
+	const result = await executeStatement(
+		`DELETE FROM notes
+		 WHERE id = ? AND user_id = ? AND deleted_at IS NOT NULL`,
+		[noteId, userId]
+	);
+	return result.affectedRows > 0;
+}
+
+export async function purgeExpiredNotes() {
+	const result = await executeStatement(
+		`DELETE FROM notes
+		 WHERE deleted_at IS NOT NULL
+		   AND deleted_at < DATE_SUB(UTC_TIMESTAMP(), INTERVAL 30 DAY)`
+	);
+	return result.affectedRows;
 }

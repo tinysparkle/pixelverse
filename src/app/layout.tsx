@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Silkscreen, Noto_Serif_SC } from "next/font/google";
+import { Silkscreen, Noto_Serif_SC, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
 const silkscreen = Silkscreen({
@@ -12,6 +12,12 @@ const notoSerifSC = Noto_Serif_SC({
   variable: "--font-serif-sc",
   subsets: ["latin"],
   weight: ["400", "500", "700"],
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-code",
+  subsets: ["latin"],
+  weight: ["400", "700"],
 });
 
 export const metadata: Metadata = {
@@ -30,7 +36,7 @@ export default function RootLayout({
   return (
     <html
       lang="zh-CN"
-      className={`${silkscreen.variable} ${notoSerifSC.variable}`}
+      className={`${silkscreen.variable} ${notoSerifSC.variable} ${jetbrainsMono.variable}`}
     >
       <body>{children}</body>
     </html>

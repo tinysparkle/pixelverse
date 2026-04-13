@@ -3,6 +3,7 @@
 @theme inline {
   --font-pixel: var(--font-pixel);
   --font-serif: var(--font-serif-sc);
+  --font-code: var(--font-code);
 }
 
 :root {

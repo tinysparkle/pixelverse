@@ -23,3 +23,11 @@ export interface NoteSummary {
 	updatedAt: string;
 	excerpt: string;
 }
+
+export interface DeletedNoteSummary {
+	id: string;
+	title: string;
+	excerpt: string;
+	deletedAt: string;
+	updatedAt: string;
+}

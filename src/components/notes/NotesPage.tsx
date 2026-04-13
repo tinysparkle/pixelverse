@@ -26,6 +26,14 @@ interface NoteDetail {
 
 type SaveState = "saved" | "saving" | "dirty" | "error";
 
+interface DeletedNoteItem {
+  id: string;
+  title: string;
+  excerpt: string;
+  deletedAt: string;
+  updatedAt: string;
+}
+
 /* ── 图片上传处理 ── */
 async function uploadImage(file: File): Promise<string | null> {
   const formData = new FormData();
@@ -102,6 +110,15 @@ export default function NotesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarWidth, setSidebarWidth] = useState(280);
+  const [viewMode, setViewMode] = useState<"notes" | "trash">("notes");
+  const [trashList, setTrashList] = useState<DeletedNoteItem[]>([]);
+  const [trashLoading, setTrashLoading] = useState(false);
+  const [pendingPermanentDelete, setPendingPermanentDelete] = useState<DeletedNoteItem | null>(null);
+  const [pendingEmptyTrash, setPendingEmptyTrash] = useState(false);
+  const isResizing = useRef(false);
+  const resizeStartX = useRef(0);
+  const resizeStartWidth = useRef(280);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dirtyRef = useRef(false);
   const activeIdRef = useRef<string | null>(null);
@@ -339,6 +356,73 @@ export default function NotesPage() {
     fetchList(q || undefined);
   };
 
+  // ── 废纸篓操作 ──
+  const fetchTrash = useCallback(async () => {
+    setTrashLoading(true);
+    try {
+      const res = await fetch("/api/notes/trash");
+      if (res.ok) {
+        const data = await res.json();
+        setTrashList(data);
+      } else if (res.status === 401) {
+        router.push("/login");
+      }
+    } catch { /* 网络异常 */ }
+    setTrashLoading(false);
+  }, [router]);
+
+  const switchToTrash = async () => {
+    if (dirtyRef.current && activeIdRef.current) await saveNoteRef.current();
+    setViewMode("trash");
+    setActiveId(null);
+    activeIdRef.current = null;
+    setActiveNote(null);
+    setTitle("");
+    editor?.commands.setContent("", { emitUpdate: false });
+    fetchTrash();
+  };
+
+  const switchToNotes = () => {
+    setViewMode("notes");
+    setTrashList([]);
+    fetchList(searchQuery || undefined);
+  };
+
+  const restoreNote = async (id: string) => {
+    try {
+      const res = await fetch(`/api/notes/${id}/restore`, { method: "POST" });
+      if (res.ok) {
+        fetchTrash();
+      }
+    } catch { /* 网络异常 */ }
+  };
+
+  const permanentDeleteNote = async (id: string) => {
+    try {
+      const res = await fetch(`/api/notes/${id}/permanent`, { method: "DELETE" });
+      if (res.ok) {
+        fetchTrash();
+        setPendingPermanentDelete(null);
+      }
+    } catch { /* 网络异常 */ }
+  };
+
+  const emptyTrash = async () => {
+    await Promise.allSettled(
+      trashList.map(item =>
+        fetch(`/api/notes/${item.id}/permanent`, { method: "DELETE" })
+      )
+    );
+    setPendingEmptyTrash(false);
+    fetchTrash();
+  };
+
+  const daysUntilPurge = (deletedAt: string) => {
+    const deleted = new Date(deletedAt);
+    const expiry = new Date(deleted.getTime() + 30 * 24 * 60 * 60 * 1000);
+    return Math.max(0, Math.ceil((expiry.getTime() - Date.now()) / (24 * 60 * 60 * 1000)));
+  };
+
   // 标题变更触发保存 — 通过 ref 防抖
   const handleTitleChange = (val: string) => {
     setTitle(val);
@@ -354,6 +438,43 @@ export default function NotesPage() {
     dirty: "○ 未保存",
     error: "✕ 保存失败",
   };
+
+  // ── 拖拽调整侧边栏宽度 ──
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isResizing.current = true;
+    resizeStartX.current = e.clientX;
+    resizeStartWidth.current = sidebarWidth;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    // 拖拽期间禁用过渡，避免延迟跟手
+    containerRef.current?.style.setProperty("transition", "none");
+  }, [sidebarWidth]);
+
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isResizing.current) return;
+      const delta = e.clientX - resizeStartX.current;
+      const newWidth = Math.min(500, Math.max(200, resizeStartWidth.current + delta));
+      setSidebarWidth(newWidth);
+    };
+    const onMouseUp = () => {
+      if (!isResizing.current) return;
+      isResizing.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      // 松手后恢复过渡（用于折叠动画）
+      containerRef.current?.style.removeProperty("transition");
+    };
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("mouseup", onMouseUp);
+    return () => {
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("mouseup", onMouseUp);
+    };
+  }, []);
 
   const formatDate = (d: string) => {
     const date = new Date(d);
@@ -379,7 +500,11 @@ export default function NotesPage() {
   }
 
   return (
-    <div className={styles.container}>
+    <div
+      ref={containerRef}
+      className={styles.container}
+      style={sidebarCollapsed ? undefined : { gridTemplateColumns: `${sidebarWidth}px 6px 1fr` }}
+    >
       {/* 侧边栏 */}
       <aside className={`${styles.sidebar} ${sidebarCollapsed ? styles.collapsed : ""}`}>
         <div className={styles.sidebarHead}>
@@ -395,66 +520,181 @@ export default function NotesPage() {
 
         {!sidebarCollapsed && (
           <>
-            <div className={styles.sidebarActions}>
-              <button className={styles.newBtn} onClick={createNote}>
-                + 新建笔记
-              </button>
-              <div className={styles.searchWrap}>
-                <span className={styles.searchIcon}>⌕</span>
-                <input
-                  className={styles.search}
-                  type="text"
-                  placeholder="搜索..."
-                  value={searchQuery}
-                  onChange={(e) => handleSearch(e.target.value)}
-                />
-              </div>
-            </div>
+            {viewMode === "notes" && (
+              <>
+                <div className={styles.sidebarActions}>
+                  <button className={styles.newBtn} onClick={createNote}>
+                    + 新建笔记
+                  </button>
+                  <div className={styles.searchWrap}>
+                    <span className={styles.searchIcon}>⌕</span>
+                    <input
+                      className={styles.search}
+                      type="text"
+                      placeholder="搜索..."
+                      value={searchQuery}
+                      onChange={(e) => handleSearch(e.target.value)}
+                    />
+                  </div>
+                </div>
 
-            <div className={styles.listHead}>
-              <span className={styles.listCount}>
-                {notesList.length} 篇笔记
-              </span>
-            </div>
+                <div className={styles.listHead}>
+                  <span className={styles.listCount}>
+                    {notesList.length} 篇笔记
+                  </span>
+                </div>
 
-            <div className={styles.list}>
-              {notesList.length === 0 ? (
-                <div className={styles.empty}>
-                  <span className={styles.emptyIcon}>✎</span>
-                  <p>{searchQuery ? "没有搜到相关笔记" : "还没有笔记"}</p>
-                  {!searchQuery && (
-                    <button className={styles.emptyBtn} onClick={createNote}>
-                      新建第一篇
-                    </button>
+                <div className={styles.list}>
+                  {notesList.length === 0 ? (
+                    <div className={styles.empty}>
+                      <span className={styles.emptyIcon}>✎</span>
+                      <p>{searchQuery ? "没有搜到相关笔记" : "还没有笔记"}</p>
+                      {!searchQuery && (
+                        <button className={styles.emptyBtn} onClick={createNote}>
+                          新建第一篇
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    notesList.map((n) => (
+                      <button
+                        key={n.id}
+                        className={`${styles.listItem} ${n.id === activeId ? styles.active : ""}`}
+                        onClick={() => switchNote(n.id)}
+                      >
+                        <span className={styles.itemTitle}>
+                          {n.title || "无标题"}
+                        </span>
+                        <span className={styles.itemExcerpt}>
+                          {n.excerpt || "空白笔记"}
+                        </span>
+                        <span className={styles.itemTime}>
+                          {formatDate(n.updatedAt)}
+                        </span>
+                      </button>
+                    ))
                   )}
                 </div>
-              ) : (
-                notesList.map((n) => (
-                  <button
-                    key={n.id}
-                    className={`${styles.listItem} ${n.id === activeId ? styles.active : ""}`}
-                    onClick={() => switchNote(n.id)}
-                  >
-                    <span className={styles.itemTitle}>
-                      {n.title || "无标题"}
-                    </span>
-                    <span className={styles.itemExcerpt}>
-                      {n.excerpt || "空白笔记"}
-                    </span>
-                    <span className={styles.itemTime}>
-                      {formatDate(n.updatedAt)}
-                    </span>
-                  </button>
-                ))
+              </>
+            )}
+
+            {viewMode === "trash" && (
+              <>
+                <div className={styles.listHead}>
+                  <span className={styles.listCount}>废纸篓</span>
+                </div>
+                <div className={styles.list}>
+                  {trashList.length === 0 ? (
+                    <div className={styles.empty}>
+                      <span className={styles.emptyIcon}>🗑</span>
+                      <p>废纸篓是空的</p>
+                    </div>
+                  ) : (
+                    trashList.map((n) => (
+                      <div key={n.id} className={styles.listItem}>
+                        <span className={styles.itemTitle}>
+                          {n.title || "无标题"}
+                        </span>
+                        <span className={styles.itemExcerpt}>
+                          {n.excerpt || "空白笔记"}
+                        </span>
+                        <span className={styles.itemTime}>
+                          {daysUntilPurge(n.deletedAt)}天后自动删除
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
+
+            <div className={styles.trashDivider} />
+            <button
+              className={`${styles.trashBtn} ${viewMode === "trash" ? styles.trashActive : ""}`}
+              onClick={viewMode === "trash" ? switchToNotes : switchToTrash}
+            >
+              <span>{viewMode === "trash" ? "← 返回笔记" : "🗑 废纸篓"}</span>
+              {viewMode === "notes" && trashList.length > 0 && (
+                <span className={styles.trashBadge}>{trashList.length}</span>
               )}
-            </div>
+            </button>
           </>
         )}
       </aside>
 
+      {/* 拖拽分割条 */}
+      {!sidebarCollapsed && (
+        <div className={styles.resizer} onMouseDown={handleResizeStart} />
+      )}
+
       {/* 编辑区 */}
       <main className={styles.editor}>
-        {activeNote ? (
+        {viewMode === "trash" ? (
+          <div className={styles.trashView}>
+            <div className={styles.trashHeader}>
+              <div>
+                <h2 className={styles.trashTitle}>废纸篓</h2>
+                <p className={styles.trashSubtitle}>
+                  {trashList.length} 篇已删除笔记 · 30天后自动永久删除
+                </p>
+              </div>
+              {trashList.length > 0 && (
+                <button
+                  className={styles.emptyTrashBtn}
+                  onClick={() => setPendingEmptyTrash(true)}
+                >
+                  清空废纸篓
+                </button>
+              )}
+            </div>
+            {trashLoading ? (
+              <div className={styles.loading}>
+                <div className={styles.loadingInner}>
+                  <span className={styles.loadingIcon}>⊹</span>
+                  <p>载入废纸篓...</p>
+                </div>
+              </div>
+            ) : trashList.length === 0 ? (
+              <div className={styles.emptyEditor}>
+                <div className={styles.emptyEditorInner}>
+                  <span className={styles.emptyEditorIcon}>🗑</span>
+                  <h3>Trash is Empty</h3>
+                  <p>删除的笔记会在这里保留30天</p>
+                </div>
+              </div>
+            ) : (
+              <div className={styles.trashItems}>
+                {trashList.map(item => (
+                  <div key={item.id} className={styles.trashItem}>
+                    <div className={styles.trashItemInfo}>
+                      <span className={styles.trashItemTitle}>{item.title || "无标题"}</span>
+                      <span className={styles.trashItemExcerpt}>{item.excerpt || "空白笔记"}</span>
+                      <div className={styles.trashItemMeta}>
+                        <span className={styles.trashItemDate}>
+                          删除于 {new Date(item.deletedAt).toLocaleDateString("zh-CN")}
+                        </span>
+                        <span className={styles.trashCountdown}>
+                          {daysUntilPurge(item.deletedAt)}天后自动删除
+                        </span>
+                      </div>
+                    </div>
+                    <div className={styles.trashItemActions}>
+                      <button className={styles.restoreBtn} onClick={() => restoreNote(item.id)}>
+                        恢复
+                      </button>
+                      <button
+                        className={styles.permDeleteBtn}
+                        onClick={() => setPendingPermanentDelete(item)}
+                      >
+                        永久删除
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : activeNote ? (
           <>
             <div className={styles.editorTop}>
               <input
@@ -524,8 +764,8 @@ export default function NotesPage() {
             <span className={styles.modalTag}>Danger Zone</span>
             <h3 id="delete-note-title">删除这篇笔记？</h3>
             <p>
-              这会把"{pendingDelete.title || "无标题笔记"}"移出当前列表。
-              删除后不会自动帮你恢复。
+              这会把"{pendingDelete.title || "无标题笔记"}"移到废纸篓。
+              30天后将自动永久删除。
             </p>
             <div className={styles.modalActions}>
               <button
@@ -546,6 +786,70 @@ export default function NotesPage() {
           </div>
         </div>
       ) : null}
+
+      {pendingPermanentDelete && (
+        <div className={styles.modalLayer} role="presentation">
+          <div
+            className={styles.modalBackdrop}
+            onClick={() => setPendingPermanentDelete(null)}
+          />
+          <div className={styles.modal} role="dialog" aria-modal="true">
+            <span className={styles.modalTag}>Danger Zone</span>
+            <h3>永久删除这篇笔记？</h3>
+            <p>
+              "{pendingPermanentDelete.title || "无标题笔记"}"将被永久删除，无法恢复。
+            </p>
+            <div className={styles.modalActions}>
+              <button
+                className={styles.modalCancel}
+                onClick={() => setPendingPermanentDelete(null)}
+                type="button"
+              >
+                取消
+              </button>
+              <button
+                className={styles.modalConfirm}
+                onClick={() => permanentDeleteNote(pendingPermanentDelete.id)}
+                type="button"
+              >
+                永久删除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingEmptyTrash && (
+        <div className={styles.modalLayer} role="presentation">
+          <div
+            className={styles.modalBackdrop}
+            onClick={() => setPendingEmptyTrash(false)}
+          />
+          <div className={styles.modal} role="dialog" aria-modal="true">
+            <span className={styles.modalTag}>Danger Zone</span>
+            <h3>清空废纸篓？</h3>
+            <p>
+              废纸篓中的 {trashList.length} 篇笔记将被永久删除，无法恢复。
+            </p>
+            <div className={styles.modalActions}>
+              <button
+                className={styles.modalCancel}
+                onClick={() => setPendingEmptyTrash(false)}
+                type="button"
+              >
+                取消
+              </button>
+              <button
+                className={styles.modalConfirm}
+                onClick={emptyTrash}
+                type="button"
+              >
+                全部永久删除
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
