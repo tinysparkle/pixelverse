@@ -19,7 +19,7 @@ src/
 ├── app/
 │   ├── (marketing)/          # 营销首页 (route group，不影响URL)
 │   │   ├── page.tsx          # 服务端入口，渲染 HomePage
-│   │   ├── HomePage.tsx      # 客户端组件：英雄区、模块展示、关于区、实时时钟
+│   │   ├── HomePage.tsx      # 客户端组件：英雄区、实时时钟
 │   │   └── HomePage.module.css
 │   ├── api/
 │   │   ├── auth/[...nextauth]/route.ts   # Auth.js 处理器
@@ -151,7 +151,7 @@ npm run db:seed      # 创建开发账号 admin/123456
 
 ## 已实现功能
 
-- [x] 营销首页: 英雄区 + 模块展示 + 关于区 + 实时时钟 + 导航
+- [x] 营销首页: 英雄区 + 实时时钟 + 导航
 - [x] 认证系统: 登录表单 + Credentials 验证 + JWT session + 中间件保护
 - [x] 云笔记: CRUD + 富文本编辑 + 自动保存 + 搜索 + 软删除 + 字符计数
 - [x] 图片上传: 拖放/粘贴/按钮 + 客户端&服务端校验 + 本地存储
@@ -159,9 +159,8 @@ npm run db:seed      # 创建开发账号 admin/123456
 
 ## 规划中的功能
 
-首页模块展示区已预留位置:
-- 任务队列 (Task Queue) — 标记为 "即将上线"
-- 热点雷达 (Hot Radar) — 标记为 "即将上线"
+- 任务队列 (Task Queue)
+- 热点雷达 (Hot Radar)
 
 ## 注意事项
 

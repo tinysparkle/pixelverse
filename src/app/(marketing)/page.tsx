@@ -3,7 +3,7 @@ import HomePage from "./HomePage";
 
 export const metadata = {
   title: "Pixelverse",
-  description: "一个会继续长大的个人站",
+  description: "像素宇宙，探索从这里开始",
 };
 
 export default async function MarketingPage() {
