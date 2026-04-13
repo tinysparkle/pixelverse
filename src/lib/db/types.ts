@@ -57,3 +57,44 @@ export interface TaskSummary {
 	completedAt: string | null;
 	updatedAt: string;
 }
+
+/* ── News ── */
+
+export interface NewsItemRecord {
+	id: string;
+	source: string;
+	sourceUrl: string;
+	title: string;
+	titleZh: string | null;
+	summary: string | null;
+	summaryZh: string | null;
+	content: string | null;
+	relevanceScore: number;
+	tags: string[];
+	publishedAt: string | null;
+	fetchedAt: string;
+	createdAt: string;
+}
+
+export interface NewsItemSummary {
+	id: string;
+	source: string;
+	sourceUrl: string;
+	title: string;
+	titleZh: string | null;
+	summary: string | null;
+	summaryZh: string | null;
+	relevanceScore: number;
+	tags: string[];
+	publishedAt: string | null;
+	bookmarked: boolean;
+	read: boolean;
+}
+
+export interface NewsKeywordRecord {
+	id: string;
+	userId: string;
+	keyword: string;
+	enabled: boolean;
+	createdAt: string;
+}

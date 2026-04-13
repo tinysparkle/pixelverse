@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { RowDataPacket } from "mysql2/promise";
 import { executeStatement, queryRows, type SqlValue } from "@/lib/db";
-import type { NoteRecord, NoteSummary, DeletedNoteSummary, UserRecord, TaskRecord, TaskSummary, TaskPriority } from "@/lib/db/types";
+import type { NoteRecord, NoteSummary, DeletedNoteSummary, UserRecord, TaskRecord, TaskSummary, TaskPriority, NewsItemRecord, NewsItemSummary, NewsKeywordRecord } from "@/lib/db/types";
 
 type UserRow = RowDataPacket & {
 	id: string;
@@ -498,4 +498,241 @@ export async function getUpcomingTasksForUser(userId: string, days: number = 7) 
 			updatedAt: task.updatedAt,
 		};
 	});
+}
+
+/* ── News ── */
+
+type NewsRow = RowDataPacket & {
+	id: string;
+	source: string;
+	source_url: string;
+	title: string;
+	title_zh: string | null;
+	summary: string | null;
+	summary_zh: string | null;
+	content: string | null;
+	relevance_score: number;
+	tags: string | null;
+	published_at: Date | string | null;
+	fetched_at: Date | string;
+	created_at: Date | string;
+	bookmarked?: number;
+	is_read?: number;
+};
+
+type NewsKeywordRow = RowDataPacket & {
+	id: string;
+	user_id: string;
+	keyword: string;
+	enabled: number;
+	created_at: Date | string;
+};
+
+function mapNewsItem(row: NewsRow): NewsItemRecord {
+	return {
+		id: row.id,
+		source: row.source,
+		sourceUrl: row.source_url,
+		title: row.title,
+		titleZh: row.title_zh,
+		summary: row.summary,
+		summaryZh: row.summary_zh,
+		content: row.content,
+		relevanceScore: Number(row.relevance_score),
+		tags: parseTags(row.tags),
+		publishedAt: toIsoString(row.published_at),
+		fetchedAt: toIsoString(row.fetched_at) ?? new Date().toISOString(),
+		createdAt: toIsoString(row.created_at) ?? new Date().toISOString(),
+	};
+}
+
+function mapNewsKeyword(row: NewsKeywordRow): NewsKeywordRecord {
+	return {
+		id: row.id,
+		userId: row.user_id,
+		keyword: row.keyword,
+		enabled: row.enabled === 1,
+		createdAt: toIsoString(row.created_at) ?? new Date().toISOString(),
+	};
+}
+
+export async function insertNewsItems(
+	items: Array<{
+		id: string;
+		source: string;
+		sourceUrl: string;
+		title: string;
+		titleZh?: string | null;
+		summary?: string | null;
+		summaryZh?: string | null;
+		content?: string | null;
+		relevanceScore?: number;
+		tags?: string[];
+		publishedAt?: string | null;
+	}>
+) {
+	let inserted = 0;
+	for (const item of items) {
+		const tagsStr = item.tags?.length ? item.tags.join(",") : null;
+		try {
+			await executeStatement(
+				`INSERT IGNORE INTO news_items (id, source, source_url, title, title_zh, summary, summary_zh, content, relevance_score, tags, published_at)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				[
+					item.id,
+					item.source,
+					item.sourceUrl,
+					item.title,
+					item.titleZh ?? null,
+					item.summary ?? null,
+					item.summaryZh ?? null,
+					item.content ?? null,
+					item.relevanceScore ?? 0,
+					tagsStr,
+					item.publishedAt ?? null,
+				]
+			);
+			inserted++;
+		} catch {
+			// duplicate source_url, skip
+		}
+	}
+	return inserted;
+}
+
+export async function getNewsItems(
+	userId: string,
+	filters?: {
+		keyword?: string;
+		source?: string;
+		bookmarked?: boolean;
+		unread?: boolean;
+		limit?: number;
+		offset?: number;
+	}
+) {
+	const conditions: string[] = [];
+	const values: SqlValue[] = [userId, userId];
+
+	if (filters?.keyword) {
+		const pattern = `%${escapeLike(filters.keyword)}%`;
+		conditions.push(
+			"(n.title LIKE ? ESCAPE '\\\\' OR n.title_zh LIKE ? ESCAPE '\\\\' OR n.summary LIKE ? ESCAPE '\\\\' OR n.summary_zh LIKE ? ESCAPE '\\\\' OR n.tags LIKE ? ESCAPE '\\\\')"
+		);
+		values.push(pattern, pattern, pattern, pattern, pattern);
+	}
+
+	if (filters?.source) {
+		conditions.push("n.source = ?");
+		values.push(filters.source);
+	}
+
+	if (filters?.bookmarked) {
+		conditions.push("b.news_id IS NOT NULL");
+	}
+
+	if (filters?.unread) {
+		conditions.push("r.news_id IS NULL");
+	}
+
+	const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+	const limit = filters?.limit ?? 50;
+	const offset = filters?.offset ?? 0;
+
+	const rows = await queryRows<NewsRow[]>(
+		`SELECT n.id, n.source, n.source_url, n.title, n.title_zh, n.summary, n.summary_zh,
+		        n.relevance_score, n.tags, n.published_at, n.fetched_at, n.created_at,
+		        CASE WHEN b.news_id IS NOT NULL THEN 1 ELSE 0 END AS bookmarked,
+		        CASE WHEN r.news_id IS NOT NULL THEN 1 ELSE 0 END AS is_read
+		 FROM news_items n
+		 LEFT JOIN news_bookmarks b ON b.news_id = n.id AND b.user_id = ?
+		 LEFT JOIN news_read r ON r.news_id = n.id AND r.user_id = ?
+		 ${where}
+		 ORDER BY n.published_at DESC, n.fetched_at DESC
+		 LIMIT ${limit} OFFSET ${offset}`,
+		values
+	);
+
+	return rows.map((row): NewsItemSummary => {
+		const item = mapNewsItem(row);
+		return {
+			id: item.id,
+			source: item.source,
+			sourceUrl: item.sourceUrl,
+			title: item.title,
+			titleZh: item.titleZh,
+			summary: item.summary,
+			summaryZh: item.summaryZh,
+			relevanceScore: item.relevanceScore,
+			tags: item.tags,
+			publishedAt: item.publishedAt,
+			bookmarked: row.bookmarked === 1,
+			read: row.is_read === 1,
+		};
+	});
+}
+
+export async function markNewsAsRead(newsId: string, userId: string) {
+	await executeStatement(
+		`INSERT IGNORE INTO news_read (user_id, news_id) VALUES (?, ?)`,
+		[userId, newsId]
+	);
+}
+
+export async function toggleNewsBookmark(newsId: string, userId: string) {
+	const rows = await queryRows<RowDataPacket[]>(
+		`SELECT 1 FROM news_bookmarks WHERE user_id = ? AND news_id = ? LIMIT 1`,
+		[userId, newsId]
+	);
+
+	if (rows.length > 0) {
+		await executeStatement(
+			`DELETE FROM news_bookmarks WHERE user_id = ? AND news_id = ?`,
+			[userId, newsId]
+		);
+		return false;
+	}
+
+	await executeStatement(
+		`INSERT INTO news_bookmarks (user_id, news_id) VALUES (?, ?)`,
+		[userId, newsId]
+	);
+	return true;
+}
+
+export async function getUserNewsKeywords(userId: string) {
+	const rows = await queryRows<NewsKeywordRow[]>(
+		`SELECT id, user_id, keyword, enabled, created_at
+		 FROM news_keywords
+		 WHERE user_id = ?
+		 ORDER BY created_at ASC`,
+		[userId]
+	);
+	return rows.map(mapNewsKeyword);
+}
+
+export async function upsertNewsKeyword(userId: string, keyword: string) {
+	const id = randomUUID();
+	await executeStatement(
+		`INSERT INTO news_keywords (id, user_id, keyword)
+		 VALUES (?, ?, ?)
+		 ON DUPLICATE KEY UPDATE enabled = 1`,
+		[id, userId, keyword]
+	);
+	return getUserNewsKeywords(userId);
+}
+
+export async function deleteNewsKeyword(keywordId: string, userId: string) {
+	const result = await executeStatement(
+		`DELETE FROM news_keywords WHERE id = ? AND user_id = ?`,
+		[keywordId, userId]
+	);
+	return result.affectedRows > 0;
+}
+
+export async function getNewsSources() {
+	const rows = await queryRows<(RowDataPacket & { source: string; cnt: number })[]>(
+		`SELECT source, COUNT(*) as cnt FROM news_items GROUP BY source ORDER BY cnt DESC`
+	);
+	return rows.map((r) => ({ source: r.source, count: r.cnt }));
 }

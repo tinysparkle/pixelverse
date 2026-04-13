@@ -11,6 +11,7 @@
     "test:watch": "vitest",
     "db:push": "tsx scripts/db-push.ts",
     "db:seed": "tsx scripts/seed.ts",
+    "db:seed:news": "tsx scripts/seed-news.ts",
     "db:setup": "npm run db:push && npm run db:seed"
   },
   "dependencies": {

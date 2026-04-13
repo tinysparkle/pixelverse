@@ -52,6 +52,7 @@ export default function HomePage({
         <nav className={styles.nav}>
           <Link href="/">首页</Link>
           {isAuthenticated && <Link href="/tasks">任务</Link>}
+          {isAuthenticated && <Link href="/news">资讯</Link>}
           <Link className={styles.navAccent} href={isAuthenticated ? "/notes" : "/login"}>
             <span className={styles.navDot} />
             {isAuthenticated ? "云笔记" : "登入"}

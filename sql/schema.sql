@@ -45,3 +45,57 @@ CREATE TABLE IF NOT EXISTS tasks (
     REFERENCES users (id)
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS news_items (
+  id CHAR(36) NOT NULL,
+  source VARCHAR(50) NOT NULL,
+  source_url VARCHAR(768) NOT NULL,
+  title VARCHAR(500) NOT NULL,
+  title_zh VARCHAR(500) NULL,
+  summary TEXT NULL,
+  summary_zh TEXT NULL,
+  content TEXT NULL,
+  relevance_score DECIMAL(3,2) NOT NULL DEFAULT 0.00,
+  tags VARCHAR(500) NULL,
+  published_at DATETIME NULL,
+  fetched_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_news_source_url (source_url),
+  KEY idx_news_published (published_at),
+  KEY idx_news_source (source)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS news_bookmarks (
+  user_id CHAR(36) NOT NULL,
+  news_id CHAR(36) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, news_id),
+  CONSTRAINT fk_news_bookmarks_user
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+  CONSTRAINT fk_news_bookmarks_news
+    FOREIGN KEY (news_id) REFERENCES news_items (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS news_read (
+  user_id CHAR(36) NOT NULL,
+  news_id CHAR(36) NOT NULL,
+  read_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (user_id, news_id),
+  CONSTRAINT fk_news_read_user
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE,
+  CONSTRAINT fk_news_read_news
+    FOREIGN KEY (news_id) REFERENCES news_items (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS news_keywords (
+  id CHAR(36) NOT NULL,
+  user_id CHAR(36) NOT NULL,
+  keyword VARCHAR(100) NOT NULL,
+  enabled TINYINT NOT NULL DEFAULT 1,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uk_news_keywords_user_kw (user_id, keyword),
+  CONSTRAINT fk_news_keywords_user
+    FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
