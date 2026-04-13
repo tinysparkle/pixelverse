@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth";
+import { getUpcomingTasksForUser } from "@/lib/db/queries";
 import HomePage from "./HomePage";
 
 export const metadata = {
@@ -8,6 +9,14 @@ export const metadata = {
 
 export default async function MarketingPage() {
   const session = await auth();
+  const userId = session?.user?.id;
 
-  return <HomePage isAuthenticated={Boolean(session?.user?.id)} />;
+  const upcomingTasks = userId ? await getUpcomingTasksForUser(userId, 7) : [];
+
+  return (
+    <HomePage
+      isAuthenticated={Boolean(userId)}
+      upcomingTasks={upcomingTasks}
+    />
+  );
 }

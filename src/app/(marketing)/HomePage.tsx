@@ -3,12 +3,16 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import PixelCat from "@/components/pet/PixelCat";
+import ReminderPanel from "@/components/tasks/ReminderPanel";
+import type { TaskSummary } from "@/lib/db/types";
 import styles from "./home.module.css";
 
 export default function HomePage({
   isAuthenticated,
+  upcomingTasks = [],
 }: {
   isAuthenticated: boolean;
+  upcomingTasks?: TaskSummary[];
 }) {
   const [clock, setClock] = useState("");
   const [mounted, setMounted] = useState(false);
@@ -47,6 +51,7 @@ export default function HomePage({
         </Link>
         <nav className={styles.nav}>
           <Link href="/">首页</Link>
+          {isAuthenticated && <Link href="/tasks">任务</Link>}
           <Link className={styles.navAccent} href={isAuthenticated ? "/notes" : "/login"}>
             <span className={styles.navDot} />
             {isAuthenticated ? "云笔记" : "登入"}
@@ -87,6 +92,11 @@ export default function HomePage({
         <span className={styles.footerNote}>Pixelverse / 像素宇宙</span>
         <span className={styles.time}>{clock}</span>
       </footer>
+
+      {/* 即将到期的任务提醒 */}
+      {isAuthenticated && upcomingTasks.length > 0 && (
+        <ReminderPanel initialTasks={upcomingTasks} />
+      )}
 
       {/* 像素小猫 - 在屏幕边缘走动 */}
       <PixelCat />

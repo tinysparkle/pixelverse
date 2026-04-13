@@ -8,8 +8,12 @@ export const config = {
     // 保护以下路由，要求登录
     "/notes",
     "/notes/:path*",
+    "/tasks",
+    "/tasks/:path*",
     "/api/notes",
     "/api/notes/:path*",
+    "/api/tasks",
+    "/api/tasks/:path*",
     "/api/upload",
   ],
 };

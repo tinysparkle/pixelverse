@@ -31,3 +31,29 @@ export interface DeletedNoteSummary {
 	deletedAt: string;
 	updatedAt: string;
 }
+
+export type TaskPriority = "high" | "medium" | "low";
+
+export interface TaskRecord {
+	id: string;
+	userId: string;
+	title: string;
+	description: string | null;
+	dueDate: string | null;
+	priority: TaskPriority;
+	tags: string[];
+	completedAt: string | null;
+	createdAt: string;
+	updatedAt: string;
+	deletedAt: string | null;
+}
+
+export interface TaskSummary {
+	id: string;
+	title: string;
+	dueDate: string | null;
+	priority: TaskPriority;
+	tags: string[];
+	completedAt: string | null;
+	updatedAt: string;
+}

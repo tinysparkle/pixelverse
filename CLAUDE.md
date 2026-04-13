@@ -31,12 +31,19 @@ src/
 │   │   └── LoginForm.tsx     # 客户端登录表单
 │   ├── notes/
 │   │   └── page.tsx          # 受保护的云笔记工作区入口
+│   ├── tasks/
+│   │   └── page.tsx          # 受保护的任务队列入口
 │   ├── layout.tsx            # 根布局，加载字体
 │   └── globals.css           # 全局样式、CSS 变量、动画定义
 ├── components/
 │   ├── notes/
 │   │   ├── NotesPage.tsx     # 主编辑器组件 (~660行)：侧栏 + Tiptap 编辑器 + 工具栏
 │   │   └── NotesPage.module.css
+│   ├── tasks/
+│   │   ├── TasksPage.tsx     # 任务管理主组件：筛选栏 + 任务列表 + 内联表单
+│   │   ├── tasks.module.css
+│   │   ├── ReminderPanel.tsx # 首页侧边提醒面板
+│   │   └── reminder.module.css
 │   └── pet/
 │       ├── PixelCat.tsx      # 底部浮动像素幽灵猫吉祥物
 │       └── PixelCat.module.css
@@ -91,6 +98,12 @@ npm run db:seed      # 创建开发账号 admin/123456
   - `GET /api/notes?query=xxx` — 列表 + 搜索
   - `POST /api/notes` — 新建
   - `GET/PATCH/DELETE /api/notes/[id]` — 单条操作
+- 任务 API 模式:
+  - `GET /api/tasks?tag=&priority=&status=` — 列表 + 筛选
+  - `POST /api/tasks` — 新建
+  - `GET /api/tasks/upcoming?days=7` — 即将到期的任务
+  - `GET/PATCH/DELETE /api/tasks/[id]` — 单条操作
+  - `POST /api/tasks/[id]/toggle` — 切换完成状态
 - DELETE 是软删除 (设置 `deleted_at` 时间戳)
 - 返回格式统一为 JSON，错误使用 `{ error: string }`
 
@@ -156,10 +169,10 @@ npm run db:seed      # 创建开发账号 admin/123456
 - [x] 云笔记: CRUD + 富文本编辑 + 自动保存 + 搜索 + 软删除 + 字符计数
 - [x] 图片上传: 拖放/粘贴/按钮 + 客户端&服务端校验 + 本地存储
 - [x] 像素猫吉祥物: SVG 像素画 + 浮动动画 + 思考泡泡 + 点击交互 + 闪烁效果
+- [x] 任务队列: CRUD + 优先级 + 标签 + 截止日期 + 筛选 + 首页侧边提醒面板
 
 ## 规划中的功能
 
-- 任务队列 (Task Queue)
 - 热点雷达 (Hot Radar)
 
 ## 注意事项
@@ -168,4 +181,6 @@ npm run db:seed      # 创建开发账号 admin/123456
 - `.env.local` 不提交到仓库，包含 AUTH_SECRET、DATABASE_URL 等敏感配置
 - 表结构变更统一修改 `sql/schema.sql`，不要直接改线上库
 - `middleware.ts` 中的 matcher 决定哪些路由受保护，新增受保护路由需更新
+- 任务标签使用逗号分隔字符串存储（`tags VARCHAR(500)`），查询时用 `FIND_IN_SET`
+- 首页提醒面板的天数阈值存储在 `localStorage`（key: `pixelverse_reminder_days`），默认 7 天
 - Path alias: `@/*` 映射到 `./src/*`
