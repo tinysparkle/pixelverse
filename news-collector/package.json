@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "db:init": "wrangler d1 execute news-collector-db --file=./schema.sql"
+    "db:init": "wrangler d1 execute news-collector-db --remote --file=./schema.sql"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250109.0",

@@ -19,8 +19,8 @@ export async function fetchHackerNews(): Promise<NewsEntry[]> {
 	});
 	const ids: number[] = await res.json();
 
-	// 取前 30 条
-	const topIds = ids.slice(0, 30);
+	// 手动触发和 cron 都控制在较小批次，避免 Worker 请求超时
+	const topIds = ids.slice(0, 12);
 
 	const items = await Promise.allSettled(
 		topIds.map(async (id) => {

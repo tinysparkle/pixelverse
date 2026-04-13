@@ -58,7 +58,7 @@ function parseRSS(xml: string, sourceName: string): NewsEntry[] {
 	let match: RegExpExecArray | null;
 	let count = 0;
 
-	while ((match = itemRegex.exec(xml)) !== null && count < 20) {
+	while ((match = itemRegex.exec(xml)) !== null && count < 5) {
 		const block = match[1];
 
 		const title = extractTag(block, "title");

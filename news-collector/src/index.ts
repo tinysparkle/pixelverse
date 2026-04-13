@@ -29,7 +29,7 @@ export default {
 	},
 
 	// HTTP API: 供 Pixelverse 拉取数据
-	async fetch(request: Request, env: Env): Promise<Response> {
+	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 		const url = new URL(request.url);
 
 		if (url.pathname === "/" || url.pathname === "/health") {
@@ -51,33 +51,16 @@ export default {
 			const limit = Math.min(Number(url.searchParams.get("limit")) || 100, 500);
 			const since = url.searchParams.get("since") || "";
 
-			let query = "SELECT * FROM news_items";
-			const params: string[] = [];
+			const queryBase =
+				"SELECT * FROM news_items" +
+				(since ? " WHERE fetched_at > ?" : "") +
+				` ORDER BY published_at DESC, fetched_at DESC LIMIT ${limit}`;
 
-			if (since) {
-				query += " WHERE fetched_at > ?1";
-				params.push(since);
-			}
+			const statement = since
+				? env.DB.prepare(queryBase).bind(since)
+				: env.DB.prepare(queryBase);
 
-			query += " ORDER BY published_at DESC, fetched_at DESC LIMIT ?";
-			params.push(String(limit));
-
-			const paramIndex = params.length;
-			// Rebuild with proper positional params
-			let finalQuery = "SELECT * FROM news_items";
-			const finalParams: string[] = [];
-
-			if (since) {
-				finalQuery += ` WHERE fetched_at > ?`;
-				finalParams.push(since);
-			}
-
-			finalQuery += ` ORDER BY published_at DESC, fetched_at DESC LIMIT ?`;
-			finalParams.push(String(limit));
-
-			const result = await env.DB.prepare(finalQuery)
-				.bind(...finalParams)
-				.all();
+			const result = await statement.all();
 
 			const items = (result.results || []).map((row: Record<string, unknown>) => ({
 				id: row.id,
@@ -103,8 +86,11 @@ export default {
 				return new Response("Unauthorized", { status: 401 });
 			}
 
-			const result = await collectNews(env);
-			return Response.json(result);
+			ctx.waitUntil(collectNews(env));
+			return Response.json({
+				accepted: true,
+				message: "Collection started in background. Check /api/news in 30-60 seconds.",
+			});
 		}
 
 		return new Response("Not Found", { status: 404 });
