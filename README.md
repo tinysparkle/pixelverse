@@ -205,6 +205,103 @@ npm run db:setup
 
 所以现在已经是“真实数据库登录”，只是账号创建流程仍然由 seed 脚本提供，而不是开放注册。
 
+## 热点雷达（AI 资讯聚合）
+
+热点雷达是 Pixelverse 的 AI 资讯功能模块，自动抓取 HackerNews 等来源的最新 AI 行业动态，经过智能筛选、中文翻译后呈现，并支持每日 AI 摘要生成。
+
+### 功能概览
+
+- **自动同步**：从 Cloudflare Worker 拉取最新新闻并存入数据库
+- **AI 筛选**：Worker 内置 Llama 3.1 8B，对每条新闻评分（0–1），过滤与 AI 无关的内容
+- **双语展示**：每条新闻提供中文标题 + 摘要，支持一键切换原文
+- **每日摘要**：调用智谱 GLM-4-Flash，将当日新闻按主题分组生成中文综述
+- **关键词过滤**：用户可添加自定义关键词，仅显示匹配的资讯
+- **收藏 & 已读**：逐条标记，刷新后状态保留
+
+访问路径：登录后进入 `/news`。
+
+### 环境变量配置
+
+在 `.env.local` 中追加以下变量：
+
+```env
+# Cloudflare Worker — 新闻采集服务
+CF_WORKER_URL=https://your-worker.workers.dev
+CF_WORKER_SECRET=your-worker-secret
+
+# 智谱 AI — 每日摘要生成
+ZHIPU_API_KEY=your-zhipu-api-key
+
+# 出站代理（可选，国内服务器访问 Cloudflare / 智谱 API 时使用）
+# 优先级：OUTBOUND_PROXY > HTTPS_PROXY > HTTP_PROXY > ALL_PROXY
+OUTBOUND_PROXY=http://127.0.0.1:7890
+```
+
+如果请求 Cloudflare Worker 或智谱 API 时提示 `fetch failed`，通常是网络不通，配置 `OUTBOUND_PROXY` 后重启 `npm run dev` 即可。
+
+### Cloudflare Worker 部署
+
+Worker 源码在项目根目录的 `news-collector/` 下。
+
+```bash
+cd news-collector
+npm install
+# 在 wrangler.toml 中填写你的 Cloudflare 账号 / D1 数据库 ID
+wrangler deploy
+```
+
+部署完成后，Cloudflare 会提供一个 `*.workers.dev` 域名，填入 `CF_WORKER_URL`。
+
+Worker 默认每 6 小时自动触发一次采集，也可以在 Cloudflare Dashboard 手动触发，或通过下方的同步接口主动拉取。
+
+### 数据库表
+
+执行 `npm run db:push` 会自动创建以下表：
+
+| 表名 | 说明 |
+|------|------|
+| `news_items` | 新闻主表，存储标题、摘要、中文翻译、来源、AI 评分、标签 |
+| `news_bookmarks` | 用户收藏记录（user_id + news_id 联合主键） |
+| `news_read` | 用户已读记录 |
+| `news_keywords` | 用户自定义关键词 |
+
+### API 接口
+
+所有接口需登录（未登录返回 401）。
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/news` | 获取新闻列表，支持 `keyword` / `source` / `bookmarked` / `unread` / `limit` / `offset` 参数 |
+| PATCH | `/api/news/[id]` | 标记已读 `{"action":"read"}` 或切换收藏 `{"action":"bookmark"}` |
+| POST | `/api/news/sync` | 从 Cloudflare Worker 拉取最新新闻存入数据库 |
+| POST | `/api/news/digest` | 调用智谱 GLM-4 生成当日 AI 资讯摘要 |
+| GET | `/api/news/keywords` | 获取当前用户的关键词列表 |
+| POST | `/api/news/keywords` | 添加关键词 `{"keyword":"LLM"}` |
+| DELETE | `/api/news/keywords/[id]` | 删除关键词 |
+
+### 常见问题
+
+**同步失败：新闻服务未配置**
+
+`.env.local` 缺少 `CF_WORKER_URL` 或 `CF_WORKER_SECRET`，按上方说明填写后重启。
+
+**同步失败：fetch failed**
+
+网络无法访问 Cloudflare Worker，在 `.env.local` 中配置 `OUTBOUND_PROXY` 后重启。
+
+**摘要生成失败**
+
+检查 `ZHIPU_API_KEY` 是否正确，或同样配置代理。智谱 API Key 可在 [open.bigmodel.cn](https://open.bigmodel.cn) 注册获取。
+
+**新闻列表为空**
+
+先手动触发一次同步：登录后点击页面右上角的 **⟳ Sync** 按钮，或直接调用：
+
+```bash
+curl -X POST http://localhost:3000/api/news/sync \
+  -H "Cookie: <your-session-cookie>"
+```
+
 ## 服务器部署
 
 服务器部署文档已单独整理在 [DEPLOY.md](DEPLOY.md)。
