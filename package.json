@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@auth/core": "^0.34.3",
+    "@fontsource-variable/noto-serif-sc": "^5.2.10",
     "@tiptap/extension-image": "^3.22.3",
     "@tiptap/extension-placeholder": "^3.22.3",
     "@tiptap/pm": "^3.22.3",
@@ -38,8 +39,8 @@
     "eslint-config-next": "16.2.3",
     "jsdom": "^29.0.2",
     "tailwindcss": "^4",
-    "typescript": "^5",
     "tsx": "^4.20.6",
+    "typescript": "^5",
     "vitest": "^4.1.4"
   }
 }
