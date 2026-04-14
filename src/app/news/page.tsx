@@ -1,8 +1,8 @@
 import NewsPage from "@/components/news/NewsPage";
 
 export const metadata = {
-  title: "AI 资讯 — Pixelverse",
-  description: "AI 行业最新动态，智能聚合与筛选",
+  title: "热点雷达 — Pixelverse",
+  description: "关键词驱动的实时热点聚合与智能过滤",
 };
 
 export default function NewsRoute() {

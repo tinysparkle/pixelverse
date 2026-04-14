@@ -27,6 +27,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "关键词无效" }, { status: 400 });
   }
 
-  const keywords = await upsertNewsKeyword(session.user.id, keyword);
+	const keywords = await upsertNewsKeyword(session.user.id, keyword);
   return NextResponse.json(keywords, { status: 201 });
 }

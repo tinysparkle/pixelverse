@@ -2,16 +2,6 @@ name = "news-collector"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
 
-# Cron Trigger: 每 6 小时运行一次
-[triggers]
-crons = ["0 */6 * * *"]
-
-# D1 数据库绑定
-[[d1_databases]]
-binding = "DB"
-database_name = "news-collector-db"
-database_id = "31b720a7-d1f8-4648-b48e-cdd857feffbb"  # ← 粘贴 wrangler d1 create 输出的 ID
-
 # Workers AI 绑定
 [ai]
 binding = "AI"

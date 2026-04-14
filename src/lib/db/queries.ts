@@ -442,8 +442,6 @@ export async function toggleTaskComplete(taskId: string, userId: string) {
 	const task = await getTaskByIdForUser(taskId, userId);
 	if (!task) return null;
 
-	const newCompletedAt = task.completedAt ? null : "UTC_TIMESTAMP()";
-
 	if (task.completedAt) {
 		await executeStatement(
 			`UPDATE tasks SET completed_at = NULL, updated_at = UTC_TIMESTAMP()
@@ -513,10 +511,11 @@ type NewsRow = RowDataPacket & {
 	content: string | null;
 	relevance_score: number;
 	tags: string | null;
+	search_keyword: string | null;
 	published_at: Date | string | null;
+	expires_at: Date | string | null;
 	fetched_at: Date | string;
 	created_at: Date | string;
-	bookmarked?: number;
 	is_read?: number;
 };
 
@@ -540,7 +539,9 @@ function mapNewsItem(row: NewsRow): NewsItemRecord {
 		content: row.content,
 		relevanceScore: Number(row.relevance_score),
 		tags: parseTags(row.tags),
+		searchKeyword: row.search_keyword ?? null,
 		publishedAt: toIsoString(row.published_at),
+		expiresAt: toIsoString(row.expires_at),
 		fetchedAt: toIsoString(row.fetched_at) ?? new Date().toISOString(),
 		createdAt: toIsoString(row.created_at) ?? new Date().toISOString(),
 	};
@@ -568,16 +569,22 @@ export async function insertNewsItems(
 		content?: string | null;
 		relevanceScore?: number;
 		tags?: string[];
+		searchKeyword?: string | null;
 		publishedAt?: string | null;
 	}>
 ) {
-	let inserted = 0;
+	const insertedIds: string[] = [];
+	// 7天后过期
+	const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+		.toISOString()
+		.slice(0, 19)
+		.replace("T", " ");
 	for (const item of items) {
 		const tagsStr = item.tags?.length ? item.tags.join(",") : null;
 		try {
-			await executeStatement(
-				`INSERT IGNORE INTO news_items (id, source, source_url, title, title_zh, summary, summary_zh, content, relevance_score, tags, published_at)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			const result = await executeStatement(
+				`INSERT IGNORE INTO news_items (id, source, source_url, title, title_zh, summary, summary_zh, content, relevance_score, tags, search_keyword, published_at, expires_at)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 				[
 					item.id,
 					item.source,
@@ -589,15 +596,55 @@ export async function insertNewsItems(
 					item.content ?? null,
 					item.relevanceScore ?? 0,
 					tagsStr,
+					item.searchKeyword ?? null,
 					item.publishedAt ?? null,
+					expiresAt,
 				]
 			);
-			inserted++;
+			if (result.affectedRows > 0) {
+				insertedIds.push(item.id);
+			}
 		} catch {
 			// duplicate source_url, skip
 		}
 	}
-	return inserted;
+	return insertedIds;
+}
+
+export async function getNewsItemsByIdsForUser(userId: string, ids: string[]) {
+	if (ids.length === 0) {
+		return [];
+	}
+
+	const placeholders = ids.map(() => "?").join(", ");
+	const rows = await queryRows<NewsRow[]>(
+		`SELECT n.id, n.source, n.source_url, n.title, n.title_zh, n.summary, n.summary_zh,
+		        n.relevance_score, n.tags, n.search_keyword, n.published_at, n.fetched_at, n.created_at,
+		        CASE WHEN r.news_id IS NOT NULL THEN 1 ELSE 0 END AS is_read
+		 FROM news_items n
+		 LEFT JOIN news_read r ON r.news_id = n.id AND r.user_id = ?
+		 WHERE n.id IN (${placeholders})
+		 ORDER BY n.published_at DESC, n.fetched_at DESC`,
+		[userId, ...ids]
+	);
+
+	return rows.map((row): NewsItemSummary => {
+		const item = mapNewsItem(row);
+		return {
+			id: item.id,
+			source: item.source,
+			sourceUrl: item.sourceUrl,
+			title: item.title,
+			titleZh: item.titleZh,
+			summary: item.summary,
+			summaryZh: item.summaryZh,
+			relevanceScore: item.relevanceScore,
+			tags: item.tags,
+			searchKeyword: item.searchKeyword,
+			publishedAt: item.publishedAt,
+			read: row.is_read === 1,
+		};
+	});
 }
 
 export async function getNewsItems(
@@ -605,30 +652,25 @@ export async function getNewsItems(
 	filters?: {
 		keyword?: string;
 		source?: string;
-		bookmarked?: boolean;
 		unread?: boolean;
 		limit?: number;
 		offset?: number;
 	}
 ) {
 	const conditions: string[] = [];
-	const values: SqlValue[] = [userId, userId];
+	const values: SqlValue[] = [userId];
 
 	if (filters?.keyword) {
 		const pattern = `%${escapeLike(filters.keyword)}%`;
 		conditions.push(
-			"(n.title LIKE ? ESCAPE '\\\\' OR n.title_zh LIKE ? ESCAPE '\\\\' OR n.summary LIKE ? ESCAPE '\\\\' OR n.summary_zh LIKE ? ESCAPE '\\\\' OR n.tags LIKE ? ESCAPE '\\\\')"
+			"(n.title LIKE ? ESCAPE '\\\\' OR n.title_zh LIKE ? ESCAPE '\\\\' OR n.summary LIKE ? ESCAPE '\\\\' OR n.summary_zh LIKE ? ESCAPE '\\\\' OR n.tags LIKE ? ESCAPE '\\\\' OR n.search_keyword LIKE ? ESCAPE '\\\\')"
 		);
-		values.push(pattern, pattern, pattern, pattern, pattern);
+		values.push(pattern, pattern, pattern, pattern, pattern, pattern);
 	}
 
 	if (filters?.source) {
 		conditions.push("n.source = ?");
 		values.push(filters.source);
-	}
-
-	if (filters?.bookmarked) {
-		conditions.push("b.news_id IS NOT NULL");
 	}
 
 	if (filters?.unread) {
@@ -641,11 +683,9 @@ export async function getNewsItems(
 
 	const rows = await queryRows<NewsRow[]>(
 		`SELECT n.id, n.source, n.source_url, n.title, n.title_zh, n.summary, n.summary_zh,
-		        n.relevance_score, n.tags, n.published_at, n.fetched_at, n.created_at,
-		        CASE WHEN b.news_id IS NOT NULL THEN 1 ELSE 0 END AS bookmarked,
+		        n.relevance_score, n.tags, n.search_keyword, n.published_at, n.fetched_at, n.created_at,
 		        CASE WHEN r.news_id IS NOT NULL THEN 1 ELSE 0 END AS is_read
 		 FROM news_items n
-		 LEFT JOIN news_bookmarks b ON b.news_id = n.id AND b.user_id = ?
 		 LEFT JOIN news_read r ON r.news_id = n.id AND r.user_id = ?
 		 ${where}
 		 ORDER BY n.published_at DESC, n.fetched_at DESC
@@ -665,8 +705,8 @@ export async function getNewsItems(
 			summaryZh: item.summaryZh,
 			relevanceScore: item.relevanceScore,
 			tags: item.tags,
+			searchKeyword: item.searchKeyword,
 			publishedAt: item.publishedAt,
-			bookmarked: row.bookmarked === 1,
 			read: row.is_read === 1,
 		};
 	});
@@ -675,15 +715,13 @@ export async function getNewsItems(
 export async function getNewsItemByIdForUser(newsId: string, userId: string) {
 	const rows = await queryRows<NewsRow[]>(
 		`SELECT n.id, n.source, n.source_url, n.title, n.title_zh, n.summary, n.summary_zh,
-		        n.content, n.relevance_score, n.tags, n.published_at, n.fetched_at, n.created_at,
-		        CASE WHEN b.news_id IS NOT NULL THEN 1 ELSE 0 END AS bookmarked,
+		        n.content, n.relevance_score, n.tags, n.search_keyword, n.published_at, n.fetched_at, n.created_at,
 		        CASE WHEN r.news_id IS NOT NULL THEN 1 ELSE 0 END AS is_read
 		 FROM news_items n
-		 LEFT JOIN news_bookmarks b ON b.news_id = n.id AND b.user_id = ?
 		 LEFT JOIN news_read r ON r.news_id = n.id AND r.user_id = ?
 		 WHERE n.id = ?
 		 LIMIT 1`,
-		[userId, userId, newsId]
+		[userId, newsId]
 	);
 
 	if (!rows[0]) {
@@ -702,10 +740,10 @@ export async function getNewsItemByIdForUser(newsId: string, userId: string) {
 		content: item.content,
 		relevanceScore: item.relevanceScore,
 		tags: item.tags,
+		searchKeyword: item.searchKeyword,
 		publishedAt: item.publishedAt,
 		fetchedAt: item.fetchedAt,
 		createdAt: item.createdAt,
-		bookmarked: rows[0].bookmarked === 1,
 		read: rows[0].is_read === 1,
 	} satisfies NewsItemDetail;
 }
@@ -717,25 +755,43 @@ export async function markNewsAsRead(newsId: string, userId: string) {
 	);
 }
 
-export async function toggleNewsBookmark(newsId: string, userId: string) {
-	const rows = await queryRows<RowDataPacket[]>(
-		`SELECT 1 FROM news_bookmarks WHERE user_id = ? AND news_id = ? LIMIT 1`,
-		[userId, newsId]
+export async function cleanupExpiredNews() {
+	const result = await executeStatement(
+		`DELETE FROM news_items WHERE expires_at IS NOT NULL AND expires_at < NOW()`
+	);
+	return result.affectedRows;
+}
+
+export async function getNewItemsSince(userId: string, since: Date) {
+	const sinceStr = since.toISOString().slice(0, 19).replace("T", " ");
+	const rows = await queryRows<NewsRow[]>(
+		`SELECT n.id, n.source, n.source_url, n.title, n.title_zh, n.summary, n.summary_zh,
+		        n.relevance_score, n.tags, n.search_keyword, n.published_at, n.fetched_at, n.created_at,
+		        CASE WHEN r.news_id IS NOT NULL THEN 1 ELSE 0 END AS is_read
+		 FROM news_items n
+		 LEFT JOIN news_read r ON r.news_id = n.id AND r.user_id = ?
+		 WHERE n.created_at > ?
+		 ORDER BY n.published_at DESC, n.fetched_at DESC`,
+		[userId, sinceStr]
 	);
 
-	if (rows.length > 0) {
-		await executeStatement(
-			`DELETE FROM news_bookmarks WHERE user_id = ? AND news_id = ?`,
-			[userId, newsId]
-		);
-		return false;
-	}
-
-	await executeStatement(
-		`INSERT INTO news_bookmarks (user_id, news_id) VALUES (?, ?)`,
-		[userId, newsId]
-	);
-	return true;
+	return rows.map((row): NewsItemSummary => {
+		const item = mapNewsItem(row);
+		return {
+			id: item.id,
+			source: item.source,
+			sourceUrl: item.sourceUrl,
+			title: item.title,
+			titleZh: item.titleZh,
+			summary: item.summary,
+			summaryZh: item.summaryZh,
+			relevanceScore: item.relevanceScore,
+			tags: item.tags,
+			searchKeyword: item.searchKeyword,
+			publishedAt: item.publishedAt,
+			read: row.is_read === 1,
+		};
+	});
 }
 
 export async function getUserNewsKeywords(userId: string) {
@@ -766,11 +822,4 @@ export async function deleteNewsKeyword(keywordId: string, userId: string) {
 		[keywordId, userId]
 	);
 	return result.affectedRows > 0;
-}
-
-export async function getNewsSources() {
-	const rows = await queryRows<(RowDataPacket & { source: string; cnt: number })[]>(
-		`SELECT source, COUNT(*) as cnt FROM news_items GROUP BY source ORDER BY cnt DESC`
-	);
-	return rows.map((r) => ({ source: r.source, count: r.cnt }));
 }

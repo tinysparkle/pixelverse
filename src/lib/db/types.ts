@@ -71,7 +71,9 @@ export interface NewsItemRecord {
 	content: string | null;
 	relevanceScore: number;
 	tags: string[];
+	searchKeyword: string | null;
 	publishedAt: string | null;
+	expiresAt: string | null;
 	fetchedAt: string;
 	createdAt: string;
 }
@@ -86,8 +88,8 @@ export interface NewsItemSummary {
 	summaryZh: string | null;
 	relevanceScore: number;
 	tags: string[];
+	searchKeyword: string | null;
 	publishedAt: string | null;
-	bookmarked: boolean;
 	read: boolean;
 }
 
@@ -102,10 +104,10 @@ export interface NewsItemDetail {
 	content: string | null;
 	relevanceScore: number;
 	tags: string[];
+	searchKeyword: string | null;
 	publishedAt: string | null;
 	fetchedAt: string;
 	createdAt: string;
-	bookmarked: boolean;
 	read: boolean;
 }
 

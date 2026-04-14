@@ -57,13 +57,17 @@ CREATE TABLE IF NOT EXISTS news_items (
   content TEXT NULL,
   relevance_score DECIMAL(3,2) NOT NULL DEFAULT 0.00,
   tags VARCHAR(500) NULL,
+  search_keyword VARCHAR(100) NULL,
   published_at DATETIME NULL,
+  expires_at DATETIME NULL,
   fetched_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uk_news_source_url (source_url),
   KEY idx_news_published (published_at),
-  KEY idx_news_source (source)
+  KEY idx_news_source (source),
+  KEY idx_news_expires (expires_at),
+  KEY idx_news_keyword (search_keyword)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS news_bookmarks (
@@ -92,6 +96,8 @@ CREATE TABLE IF NOT EXISTS news_keywords (
   id CHAR(36) NOT NULL,
   user_id CHAR(36) NOT NULL,
   keyword VARCHAR(100) NOT NULL,
+  expanded_keywords TEXT NULL,
+  expanded_at DATETIME NULL,
   enabled TINYINT NOT NULL DEFAULT 1,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),

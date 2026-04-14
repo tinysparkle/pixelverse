@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getNewsItemByIdForUser, markNewsAsRead, toggleNewsBookmark } from "@/lib/db/queries";
+import { getNewsItemByIdForUser, markNewsAsRead } from "@/lib/db/queries";
 
 // GET /api/news/[id] — 获取单条资讯详情
 export async function GET(
@@ -22,7 +22,7 @@ export async function GET(
   return NextResponse.json(item);
 }
 
-// PATCH /api/news/[id] — 标记已读 / 切换收藏
+// PATCH /api/news/[id] — 标记已读
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -38,11 +38,6 @@ export async function PATCH(
   if (body.action === "read") {
     await markNewsAsRead(id, session.user.id);
     return NextResponse.json({ ok: true });
-  }
-
-  if (body.action === "bookmark") {
-    const bookmarked = await toggleNewsBookmark(id, session.user.id);
-    return NextResponse.json({ bookmarked });
   }
 
   return NextResponse.json({ error: "无效操作" }, { status: 400 });

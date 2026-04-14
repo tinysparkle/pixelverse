@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
-import { getNewsItems } from "@/lib/db/queries";
+import { getNewsItems, getUserNewsKeywords } from "@/lib/db/queries";
 import { generateDigest } from "@/lib/ai/zhipu";
 
 // POST /api/news/digest — 使用智谱 AI 生成每日摘要
@@ -18,7 +18,13 @@ export async function POST() {
   }
 
   try {
-    const digest = await generateDigest(items);
+    const keywordRows = await getUserNewsKeywords(session.user.id);
+    const keywords = keywordRows
+      .filter((k) => k.enabled)
+      .map((k) => k.keyword.trim())
+      .filter(Boolean);
+
+    const digest = await generateDigest(items, keywords);
     return NextResponse.json({ digest });
   } catch (err) {
     const message = err instanceof Error ? err.message : "未知错误";
