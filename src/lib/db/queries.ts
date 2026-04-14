@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { RowDataPacket } from "mysql2/promise";
 import { executeStatement, queryRows, type SqlValue } from "@/lib/db";
-import type { NoteRecord, NoteSummary, DeletedNoteSummary, UserRecord, TaskRecord, TaskSummary, TaskPriority, NewsItemRecord, NewsItemSummary, NewsKeywordRecord } from "@/lib/db/types";
+import type { NoteRecord, NoteSummary, DeletedNoteSummary, UserRecord, TaskRecord, TaskSummary, TaskPriority, NewsItemRecord, NewsItemSummary, NewsKeywordRecord, NewsItemDetail } from "@/lib/db/types";
 
 type UserRow = RowDataPacket & {
 	id: string;
@@ -670,6 +670,44 @@ export async function getNewsItems(
 			read: row.is_read === 1,
 		};
 	});
+}
+
+export async function getNewsItemByIdForUser(newsId: string, userId: string) {
+	const rows = await queryRows<NewsRow[]>(
+		`SELECT n.id, n.source, n.source_url, n.title, n.title_zh, n.summary, n.summary_zh,
+		        n.content, n.relevance_score, n.tags, n.published_at, n.fetched_at, n.created_at,
+		        CASE WHEN b.news_id IS NOT NULL THEN 1 ELSE 0 END AS bookmarked,
+		        CASE WHEN r.news_id IS NOT NULL THEN 1 ELSE 0 END AS is_read
+		 FROM news_items n
+		 LEFT JOIN news_bookmarks b ON b.news_id = n.id AND b.user_id = ?
+		 LEFT JOIN news_read r ON r.news_id = n.id AND r.user_id = ?
+		 WHERE n.id = ?
+		 LIMIT 1`,
+		[userId, userId, newsId]
+	);
+
+	if (!rows[0]) {
+		return null;
+	}
+
+	const item = mapNewsItem(rows[0]);
+	return {
+		id: item.id,
+		source: item.source,
+		sourceUrl: item.sourceUrl,
+		title: item.title,
+		titleZh: item.titleZh,
+		summary: item.summary,
+		summaryZh: item.summaryZh,
+		content: item.content,
+		relevanceScore: item.relevanceScore,
+		tags: item.tags,
+		publishedAt: item.publishedAt,
+		fetchedAt: item.fetchedAt,
+		createdAt: item.createdAt,
+		bookmarked: rows[0].bookmarked === 1,
+		read: rows[0].is_read === 1,
+	} satisfies NewsItemDetail;
 }
 
 export async function markNewsAsRead(newsId: string, userId: string) {

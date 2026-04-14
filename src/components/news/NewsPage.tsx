@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import type { NewsItemSummary, NewsKeywordRecord } from "@/lib/db/types";
+import type { NewsItemDetail, NewsItemSummary, NewsKeywordRecord } from "@/lib/db/types";
 import styles from "./news.module.css";
 
 type FilterView = "all" | "unread" | "bookmarked";
@@ -22,6 +22,8 @@ function timeAgo(iso: string | null): string {
 export default function NewsPage() {
   const [items, setItems] = useState<NewsItemSummary[]>([]);
   const [keywords, setKeywords] = useState<NewsKeywordRecord[]>([]);
+  const [selectedItem, setSelectedItem] = useState<NewsItemDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [filterView, setFilterView] = useState<FilterView>("all");
   const [activeKeyword, setActiveKeyword] = useState<string | null>(null);
@@ -140,6 +142,24 @@ export default function NewsPage() {
     setItems((prev) =>
       prev.map((item) => (item.id === newsId ? { ...item, read: true } : item))
     );
+    setSelectedItem((prev) => (prev && prev.id === newsId ? { ...prev, read: true } : prev));
+  };
+
+  const handleOpenDetail = async (newsId: string) => {
+    setDetailLoading(true);
+    try {
+      const [detailRes] = await Promise.all([
+        fetch(`/api/news/${newsId}`),
+        handleMarkRead(newsId),
+      ]);
+
+      if (detailRes.ok) {
+        const data: NewsItemDetail = await detailRes.json();
+        setSelectedItem({ ...data, read: true });
+      }
+    } finally {
+      setDetailLoading(false);
+    }
   };
 
   const handleToggleBookmark = async (newsId: string) => {
@@ -162,6 +182,17 @@ export default function NewsPage() {
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
+    });
+  };
+
+  const formatAbsoluteDate = (iso: string | null) => {
+    if (!iso) return "未知时间";
+    return new Date(iso).toLocaleString("zh-CN", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
@@ -319,7 +350,7 @@ export default function NewsPage() {
                   <article
                     key={item.id}
                     className={`${styles.card} ${item.read ? styles.cardRead : ""}`}
-                    onClick={() => handleMarkRead(item.id)}
+                    onClick={() => handleOpenDetail(item.id)}
                   >
                     <div className={styles.cardMeta}>
                       <span className={styles.cardSource}>{item.source}</span>
@@ -403,6 +434,99 @@ export default function NewsPage() {
           )}
         </main>
       </div>
+
+      {(selectedItem || detailLoading) && (
+        <div className={styles.detailOverlay} onClick={() => setSelectedItem(null)}>
+          <aside
+            className={styles.detailPanel}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className={styles.detailHeader}>
+              <div className={styles.detailHeaderMeta}>
+                <span className={styles.detailSource}>{selectedItem?.source || "载入中"}</span>
+                <span className={styles.detailTime}>
+                  {selectedItem ? formatAbsoluteDate(selectedItem.publishedAt) : "请稍候"}
+                </span>
+              </div>
+              <button
+                className={styles.detailClose}
+                onClick={() => setSelectedItem(null)}
+              >
+                ×
+              </button>
+            </div>
+
+            {detailLoading || !selectedItem ? (
+              <div className={styles.detailLoading}>详情加载中...</div>
+            ) : (
+              <>
+                <h2 className={styles.detailTitle}>{selectedItem.titleZh || selectedItem.title}</h2>
+                {selectedItem.titleZh && (
+                  <div className={styles.detailOriginalTitle}>{selectedItem.title}</div>
+                )}
+
+                <div className={styles.detailMetaStrip}>
+                  <span>相关度 {selectedItem.relevanceScore.toFixed(1)}</span>
+                  <span>抓取于 {formatAbsoluteDate(selectedItem.fetchedAt)}</span>
+                </div>
+
+                {selectedItem.tags.length > 0 && (
+                  <div className={styles.detailTags}>
+                    {selectedItem.tags.map((tag) => (
+                      <span key={tag} className={styles.detailTag}>{tag}</span>
+                    ))}
+                  </div>
+                )}
+
+                <section className={styles.detailSection}>
+                  <div className={styles.detailSectionLabel}>中文摘要</div>
+                  <p className={styles.detailParagraph}>
+                    {selectedItem.summaryZh || "暂无中文摘要"}
+                  </p>
+                </section>
+
+                {(selectedItem.content || selectedItem.summary) && (
+                  <section className={styles.detailSection}>
+                    <div className={styles.detailSectionLabel}>原文内容</div>
+                    <p className={styles.detailParagraph}>
+                      {selectedItem.content || selectedItem.summary}
+                    </p>
+                  </section>
+                )}
+
+                <div className={styles.detailActions}>
+                  <button
+                    className={`${styles.cardActionBtn} ${selectedItem.bookmarked ? styles.bookmarked : ""}`}
+                    onClick={async () => {
+                      const res = await fetch(`/api/news/${selectedItem.id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ action: "bookmark" }),
+                      });
+                      if (res.ok) {
+                        const { bookmarked } = await res.json();
+                        setSelectedItem((prev) => prev ? { ...prev, bookmarked } : prev);
+                        setItems((prev) => prev.map((item) => item.id === selectedItem.id ? { ...item, bookmarked } : item));
+                      }
+                    }}
+                  >
+                    {selectedItem.bookmarked ? "★ 已收藏" : "☆ 收藏"}
+                  </button>
+
+                  <a
+                    className={`${styles.cardActionBtn} ${styles.detailLink}`}
+                    href={selectedItem.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    打开原文 →
+                  </a>
+                </div>
+              </>
+            )}
+          </aside>
+        </div>
+      )}
     </div>
   );
 }

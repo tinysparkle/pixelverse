@@ -91,6 +91,24 @@ export interface NewsItemSummary {
 	read: boolean;
 }
 
+export interface NewsItemDetail {
+	id: string;
+	source: string;
+	sourceUrl: string;
+	title: string;
+	titleZh: string | null;
+	summary: string | null;
+	summaryZh: string | null;
+	content: string | null;
+	relevanceScore: number;
+	tags: string[];
+	publishedAt: string | null;
+	fetchedAt: string;
+	createdAt: string;
+	bookmarked: boolean;
+	read: boolean;
+}
+
 export interface NewsKeywordRecord {
 	id: string;
 	userId: string;
