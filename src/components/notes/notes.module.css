@@ -879,17 +879,64 @@
     0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
+.ocrPhotoStage {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+}
+
+.ocrPhotoImage {
+  display: block;
+  max-width: min(92vw, 1400px);
+  max-height: calc(100vh - 9rem);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  box-shadow:
+    0 24px 60px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.04);
+  -webkit-user-drag: none;
+}
+
+.ocrTextLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  user-select: text;
+  -webkit-user-select: text;
+  pointer-events: none;
+}
+
+.ocrWord {
+  position: absolute;
+  display: inline-flex;
+  align-items: flex-start;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 232, 167, 0.04);
+  white-space: pre;
+  user-select: text;
+  -webkit-user-select: text;
+  pointer-events: auto;
+  cursor: text;
+}
+
+.ocrWord::selection {
+  background: rgba(90, 169, 255, 0.35);
+  color: rgba(255, 255, 255, 0.92);
+}
+
 .photoViewerOverlay {
   position: absolute;
-  left: 0;
-  right: 0;
-  top: 0;
+  inset: 0;
   z-index: 30;
   pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
   padding:
     calc(env(safe-area-inset-top, 0px) + 0.75rem)
     calc(env(safe-area-inset-right, 0px) + 0.75rem)
-    0
+    calc(env(safe-area-inset-bottom, 0px) + 0.75rem)
     calc(env(safe-area-inset-left, 0px) + 0.75rem);
 }
 
@@ -938,11 +985,23 @@
   transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.15s;
 }
 
+.photoViewerActionBtn:disabled {
+  opacity: 0.38;
+  cursor: default;
+  transform: none;
+}
+
 .photoViewerActionBtn:hover {
   color: var(--ink);
   border-color: rgba(255, 60, 40, 0.28);
   background: rgba(255, 60, 40, 0.12);
   transform: translateY(-1px);
+}
+
+.photoViewerActionBtn:disabled:hover {
+  color: var(--ink-soft);
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .photoViewerOverlay .previewHint {
@@ -956,6 +1015,75 @@
   left: 50%;
   bottom: calc(env(safe-area-inset-bottom, 0px) + 0.85rem);
   transform: translateX(-50%);
+}
+
+.ocrPanel {
+  position: absolute;
+  right: calc(env(safe-area-inset-right, 0px) + 0.75rem);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 3.4rem);
+  width: min(360px, calc(100vw - 1.5rem));
+  max-height: min(40vh, 320px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(10, 10, 10, 0.88);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  pointer-events: auto;
+  z-index: 1;
+}
+
+.ocrPanelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 0.85rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-family: var(--font-pixel), monospace;
+  font-size: 0.66rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.ocrPanelCopyBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.ocrPanelBody {
+  overflow: auto;
+  max-height: min(40vh, 260px);
+  padding: 0.8rem 0.9rem 0.9rem;
+}
+
+.ocrPanelText {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--ink);
+  font-family: var(--font-serif-sc), serif;
+  font-size: 0.9rem;
+  line-height: 1.75;
+}
+
+.ocrPanelEmpty {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--ink-dim);
+  font-size: 0.82rem;
+}
+
+.ocrSpinner {
+  animation: spin 1s linear infinite;
 }
 
 /* ── 拖拽分割条 ── */

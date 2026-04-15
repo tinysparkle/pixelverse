@@ -7,10 +7,15 @@ import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import TiptapLink from "@tiptap/extension-link";
 import { useRouter } from "next/navigation";
-import { Menu, Plus, Search, Trash2, X, ImagePlus, ZoomIn, ZoomOut, ChevronLeft, ChevronRight } from "lucide-react";
+import { Menu, Plus, Search, Trash2, X, ImagePlus, ZoomIn, ZoomOut, ChevronLeft, ChevronRight, Copy, FileText, LoaderCircle } from "lucide-react";
 import { PhotoSlider } from "react-photo-view";
 import "react-photo-view/dist/react-photo-view.css";
 import styles from "./notes.module.css";
+import {
+  recognizeImageText,
+  terminateOcrWorker,
+  type OcrRecognitionResult,
+} from "./ocrUtils";
 import { ResizableImage } from "./ResizableImage";
 import {
   extractImageViewerItems,
@@ -45,6 +50,8 @@ interface DeletedNoteItem {
   deletedAt: string;
   updatedAt: string;
 }
+
+type OcrStatus = "idle" | "loading" | "ready" | "error";
 
 /* ── 图片上传处理 ── */
 async function uploadImage(file: File): Promise<string | null> {
@@ -137,6 +144,10 @@ export default function NotesPage() {
   const [viewerVisible, setViewerVisible] = useState(false);
   const [viewerImages, setViewerImages] = useState<ImageViewerItem[]>([]);
   const [viewerIndex, setViewerIndex] = useState(0);
+  const [ocrStatus, setOcrStatus] = useState<OcrStatus>("idle");
+  const [ocrResult, setOcrResult] = useState<OcrRecognitionResult | null>(null);
+  const [ocrPanelOpen, setOcrPanelOpen] = useState(false);
+  const [ocrError, setOcrError] = useState("");
   const [isMobile, setIsMobile] = useState(false);
   const [mobileListOpen, setMobileListOpen] = useState(false);
   const isResizing = useRef(false);
@@ -145,6 +156,7 @@ export default function NotesPage() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dirtyRef = useRef(false);
   const activeIdRef = useRef<string | null>(null);
+  const ocrJobRef = useRef(0);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -255,14 +267,45 @@ export default function NotesPage() {
     },
   });
 
+  const currentViewerImage = viewerImages[viewerIndex] ?? null;
+
   useEffect(() => {
-    if (!viewerVisible) return;
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
+    if (!viewerVisible || !currentViewerImage?.src) {
+      setOcrStatus("idle");
+      setOcrResult(null);
+      setOcrError("");
+      setOcrPanelOpen(false);
+      return;
+    }
+
+    const jobId = ++ocrJobRef.current;
+    setOcrStatus("loading");
+    setOcrResult(null);
+    setOcrError("");
+    setOcrPanelOpen(false);
+
+    recognizeImageText(currentViewerImage.src)
+      .then((result) => {
+        if (ocrJobRef.current !== jobId) return;
+        setOcrResult(result);
+        setOcrStatus("ready");
+      })
+      .catch((error: unknown) => {
+        if (ocrJobRef.current !== jobId) return;
+        setOcrError(error instanceof Error ? error.message : "识别失败，请稍后重试");
+        setOcrStatus("error");
+      });
+  }, [currentViewerImage?.src, viewerVisible]);
+
+  useEffect(() => {
     return () => {
-      document.body.style.overflow = previousOverflow;
+      void terminateOcrWorker();
     };
-  }, [viewerVisible]);
+  }, []);
+
+  const stopOcrSelectionGesture = useCallback((event: { stopPropagation: () => void }) => {
+    event.stopPropagation();
+  }, []);
 
   // 图片上传按钮处理
   const handleImageUpload = useCallback(() => {
@@ -934,11 +977,56 @@ export default function NotesPage() {
       </main>
 
       <PhotoSlider
-        images={viewerImages}
+        images={viewerImages.map((image) => ({
+          ...image,
+          render: ({ attrs }: { attrs: Record<string, unknown> }) => {
+            const isCurrent = currentViewerImage?.src === image.src;
+            const overlayWords = isCurrent && ocrStatus === "ready" ? (ocrResult?.words ?? []) : [];
+
+            return (
+              <div
+                {...attrs}
+                className={`${styles.ocrPhotoStage} ${attrs.className ?? ""}`}
+              >
+                <img
+                  className={styles.ocrPhotoImage}
+                  src={image.src}
+                  alt="图片预览"
+                  draggable={false}
+                />
+                {overlayWords.length > 0 ? (
+                  <div className={styles.ocrTextLayer} aria-label="可复制文字层">
+                    {overlayWords.map((word) => (
+                      <span
+                        key={word.id}
+                        className={styles.ocrWord}
+                        onMouseDownCapture={stopOcrSelectionGesture}
+                        onPointerDownCapture={stopOcrSelectionGesture}
+                        onTouchStartCapture={stopOcrSelectionGesture}
+                        style={{
+                          left: `${word.leftPct}%`,
+                          top: `${word.topPct}%`,
+                          width: `${word.widthPct}%`,
+                          minHeight: `${word.heightPct}%`,
+                          fontSize: `${Math.max(word.heightPct * 0.85, 1.2)}%`,
+                        }}
+                      >
+                        {word.text}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            );
+          },
+        }))}
         index={viewerIndex}
         visible={viewerVisible}
         onIndexChange={setViewerIndex}
-        onClose={() => setViewerVisible(false)}
+        onClose={() => {
+          setViewerVisible(false);
+          setOcrPanelOpen(false);
+        }}
         maskOpacity={0.92}
         pullClosable
         maskClosable
@@ -962,6 +1050,7 @@ export default function NotesPage() {
                       className={styles.photoViewerActionBtn}
                       onClick={() => onIndexChange(index === 0 ? images.length - 1 : index - 1)}
                       aria-label="上一张图片"
+                      title="上一张图片"
                     >
                       <ChevronLeft size={18} strokeWidth={2.2} />
                     </button>
@@ -970,6 +1059,7 @@ export default function NotesPage() {
                       className={styles.photoViewerActionBtn}
                       onClick={() => onIndexChange(index === images.length - 1 ? 0 : index + 1)}
                       aria-label="下一张图片"
+                      title="下一张图片"
                     >
                       <ChevronRight size={18} strokeWidth={2.2} />
                     </button>
@@ -980,6 +1070,7 @@ export default function NotesPage() {
                   className={styles.photoViewerActionBtn}
                   onClick={() => onScale(Math.max(1, scale - 0.35))}
                   aria-label="缩小图片"
+                  title="缩小图片"
                 >
                   <ZoomOut size={18} strokeWidth={2.2} />
                 </button>
@@ -988,6 +1079,7 @@ export default function NotesPage() {
                   className={styles.photoViewerActionBtn}
                   onClick={() => onScale(scale + 0.35)}
                   aria-label="放大图片"
+                  title="放大图片"
                 >
                   <ZoomIn size={18} strokeWidth={2.2} />
                 </button>
@@ -996,14 +1088,49 @@ export default function NotesPage() {
                   className={styles.photoViewerActionBtn}
                   onClick={onClose}
                   aria-label="关闭预览"
+                  title="关闭预览"
                 >
                   <X size={18} strokeWidth={2.2} />
+                </button>
+                <button
+                  type="button"
+                  className={styles.photoViewerActionBtn}
+                  onClick={() => setOcrPanelOpen((open) => !open)}
+                  aria-label="切换识别文本面板"
+                  title={ocrPanelOpen ? "隐藏识别文本面板" : "显示识别文本面板"}
+                >
+                  <FileText size={18} strokeWidth={2.2} />
                 </button>
               </div>
             </div>
             <p className={styles.previewHint}>
-              单击图片直接进入查看器；查看器内可双指缩放、拖拽查看细节，页面不会跟着滚动或缩放。
+              {ocrStatus === "loading"
+                ? "正在自动识别图片文字，完成后可直接框选复制。"
+                : ocrStatus === "error"
+                  ? ocrError || "文字识别失败，可继续查看图片。"
+                  : "OCR 完成后可直接框选复制；移动端若不便选择，可打开文本面板或复制全部文字。"}
             </p>
+            {ocrPanelOpen ? (
+              <div className={styles.ocrPanel}>
+                <div className={styles.ocrPanelHead}>
+                  <span>识别文本</span>
+                </div>
+                <div className={styles.ocrPanelBody}>
+                  {ocrStatus === "loading" ? (
+                    <div className={styles.ocrPanelEmpty}>
+                      <LoaderCircle size={16} className={styles.ocrSpinner} strokeWidth={2.2} />
+                      <span>正在识别文字...</span>
+                    </div>
+                  ) : ocrStatus === "error" ? (
+                    <div className={styles.ocrPanelEmpty}>{ocrError || "识别失败"}</div>
+                  ) : ocrResult?.text ? (
+                    <pre className={styles.ocrPanelText}>{ocrResult.text}</pre>
+                  ) : (
+                    <div className={styles.ocrPanelEmpty}>未识别到可复制文字</div>
+                  )}
+                </div>
+              </div>
+            ) : null}
           </div>
         )}
       />

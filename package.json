@@ -29,7 +29,8 @@
     "next-auth": "5.0.0-beta.30",
     "react": "19.2.4",
     "react-dom": "19.2.4",
-    "react-photo-view": "^1.2.7"
+    "react-photo-view": "^1.2.7",
+    "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
