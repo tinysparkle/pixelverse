@@ -1,13 +1,25 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, type CSSProperties } from "react";
 import Link from "next/link";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
-import Image from "@tiptap/extension-image";
+import TiptapLink from "@tiptap/extension-link";
 import { useRouter } from "next/navigation";
+import { Menu, Plus, Search, Trash2, X, ImagePlus, ZoomIn, ZoomOut, ChevronLeft, ChevronRight } from "lucide-react";
+import { PhotoSlider } from "react-photo-view";
+import "react-photo-view/dist/react-photo-view.css";
 import styles from "./notes.module.css";
+import { ResizableImage } from "./ResizableImage";
+import {
+  extractImageViewerItems,
+  findImageViewerIndex,
+  formatUrlDisplayText,
+  type ImageViewerItem,
+  isPureUrlText,
+  resolveInitialImageWidth,
+} from "./editorUtils";
 
 interface NoteItem {
   id: string;
@@ -49,10 +61,16 @@ async function uploadImage(file: File): Promise<string | null> {
 }
 
 /* ── 工具栏按钮 ── */
-function Toolbar({ editor, onImageUpload }: { editor: Editor | null; onImageUpload: () => void }) {
+function Toolbar({
+  editor,
+  onImageUpload,
+}: {
+  editor: Editor | null;
+  onImageUpload: () => void;
+}) {
   if (!editor) return null;
   const btn = (
-    label: string,
+    label: React.ReactNode,
     action: () => void,
     active: boolean,
     title: string,
@@ -93,7 +111,7 @@ function Toolbar({ editor, onImageUpload }: { editor: Editor | null; onImageUplo
       </div>
       <span className={styles.tbDivider} />
       <div className={styles.tbGroup}>
-        {btn("📷", onImageUpload, false, "插入图片")}
+        {btn(<ImagePlus size={16} strokeWidth={2.2} />, onImageUpload, false, "插入图片")}
       </div>
     </div>
   );
@@ -116,6 +134,11 @@ export default function NotesPage() {
   const [trashLoading, setTrashLoading] = useState(false);
   const [pendingPermanentDelete, setPendingPermanentDelete] = useState<DeletedNoteItem | null>(null);
   const [pendingEmptyTrash, setPendingEmptyTrash] = useState(false);
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [viewerImages, setViewerImages] = useState<ImageViewerItem[]>([]);
+  const [viewerIndex, setViewerIndex] = useState(0);
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobileListOpen, setMobileListOpen] = useState(false);
   const isResizing = useRef(false);
   const resizeStartX = useRef(0);
   const resizeStartWidth = useRef(280);
@@ -133,7 +156,12 @@ export default function NotesPage() {
     extensions: [
       StarterKit,
       Placeholder.configure({ placeholder: "开始记录你的想法..." }),
-      Image.configure({ inline: false, allowBase64: false }),
+      TiptapLink.configure({
+        autolink: true,
+        linkOnPaste: false,
+        openOnClick: true,
+      }),
+      ResizableImage.configure({ inline: false, allowBase64: false }),
     ],
     // 关键修复：onUpdate 通过 ref 调用 saveNote，永远是最新的
     onUpdate: () => {
@@ -154,13 +182,33 @@ export default function NotesPage() {
             if (file) {
               uploadImage(file).then((url) => {
                 if (url && editor) {
-                  editor.chain().focus().setImage({ src: url }).run();
+                  const initialWidth = resolveInitialImageWidth(editorBodyRef.current?.clientWidth);
+                  editor.chain().focus().setImage({ src: url, width: initialWidth }).run();
                 }
               });
             }
             return true;
           }
         }
+
+        const pastedText = event.clipboardData?.getData("text/plain") ?? "";
+        if (editor && isPureUrlText(pastedText)) {
+          event.preventDefault();
+          const href = pastedText.trim();
+          const label = formatUrlDisplayText(href);
+          editor
+            .chain()
+            .focus()
+            .insertContent({
+              type: "text",
+              text: label,
+              marks: [{ type: "link", attrs: { href } }],
+            })
+            .insertContent(" ")
+            .run();
+          return true;
+        }
+
         return false;
       },
       handleDrop: (_view, event) => {
@@ -172,7 +220,8 @@ export default function NotesPage() {
             event.preventDefault();
             uploadImage(file).then((url) => {
               if (url && editor) {
-                editor.chain().focus().setImage({ src: url }).run();
+                const initialWidth = resolveInitialImageWidth(editorBodyRef.current?.clientWidth);
+                editor.chain().focus().setImage({ src: url, width: initialWidth }).run();
               }
             });
             return true;
@@ -180,8 +229,40 @@ export default function NotesPage() {
         }
         return false;
       },
+      handleClick: (_view, _pos, event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return false;
+        if (target.closest(".resize-handle")) return false;
+
+        const imageElement = target.tagName === "IMG"
+          ? target
+          : target.closest("img");
+
+        if (!imageElement) return false;
+
+        const src = imageElement.getAttribute("src");
+        if (!src) return false;
+
+        event.preventDefault();
+        (document.activeElement as HTMLElement | null)?.blur?.();
+        const images = extractImageViewerItems(editor?.getJSON());
+        if (!images.length) return true;
+        setViewerImages(images);
+        setViewerIndex(findImageViewerIndex(images, src));
+        setViewerVisible(true);
+        return true;
+      },
     },
   });
+
+  useEffect(() => {
+    if (!viewerVisible) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [viewerVisible]);
 
   // 图片上传按钮处理
   const handleImageUpload = useCallback(() => {
@@ -193,7 +274,8 @@ export default function NotesPage() {
     if (!file || !editor) return;
     const url = await uploadImage(file);
     if (url) {
-      editor.chain().focus().setImage({ src: url }).run();
+      const initialWidth = resolveInitialImageWidth(editorBodyRef.current?.clientWidth);
+      editor.chain().focus().setImage({ src: url, width: initialWidth }).run();
     }
     e.target.value = "";
   }, [editor]);
@@ -222,19 +304,22 @@ export default function NotesPage() {
   useEffect(() => {
     if (!editor) return;
 
-    if (!activeNote) {
-      editor.commands.setContent("", { emitUpdate: false });
-      return;
-    }
+    const frame = window.requestAnimationFrame(() => {
+      if (!activeNote) {
+        editor.commands.setContent("", { emitUpdate: false });
+        return;
+      }
 
-    if (activeNote.contentJson) {
-      editor.commands.setContent(JSON.parse(activeNote.contentJson), { emitUpdate: false });
-    } else {
-      editor.commands.setContent("", { emitUpdate: false });
-    }
+      if (activeNote.contentJson) {
+        editor.commands.setContent(JSON.parse(activeNote.contentJson), { emitUpdate: false });
+      } else {
+        editor.commands.setContent("", { emitUpdate: false });
+      }
+    });
 
     dirtyRef.current = false;
     setSaveState("saved");
+    return () => window.cancelAnimationFrame(frame);
   }, [editor, activeNote]);
 
   // 保存当前笔记
@@ -286,9 +371,28 @@ export default function NotesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 768px)");
+    const apply = () => {
+      const next = mq.matches;
+      setIsMobile(next);
+      if (!next) setMobileListOpen(false);
+    };
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  useEffect(() => {
+    if (isMobile) setSidebarCollapsed(false);
+  }, [isMobile]);
+
   // 关键修复：切换笔记 — 内联 fetch，加容错
   const switchNote = async (id: string) => {
-    if (id === activeId) return;
+    if (id === activeId) {
+      setMobileListOpen(false);
+      return;
+    }
     if (dirtyRef.current && activeIdRef.current) await saveNoteRef.current();
     setActiveId(id);
     activeIdRef.current = id;
@@ -304,6 +408,7 @@ export default function NotesPage() {
         router.push("/login");
       }
     } catch { /* 网络异常 */ }
+    setMobileListOpen(false);
   };
 
   // 关键修复：新建笔记 — 直接用 POST 响应设置 activeNote，不做二次 fetch
@@ -326,6 +431,7 @@ export default function NotesPage() {
         dirtyRef.current = false;
         setSaveState("saved");
         fetchList(searchQuery || undefined);
+        setMobileListOpen(false);
         return;
       }
       if (res.status === 401) {
@@ -441,6 +547,7 @@ export default function NotesPage() {
 
   // ── 拖拽调整侧边栏宽度 ──
   const containerRef = useRef<HTMLDivElement>(null);
+  const editorBodyRef = useRef<HTMLDivElement>(null);
 
   const handleResizeStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
@@ -499,23 +606,57 @@ export default function NotesPage() {
     );
   }
 
+  const containerClassName = [
+    styles.container,
+    sidebarCollapsed ? styles.containerCollapsed : styles.containerExpanded,
+    isMobile && mobileListOpen ? styles.mobileDrawerOpen : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <div
       ref={containerRef}
-      className={styles.container}
-      style={sidebarCollapsed ? undefined : { gridTemplateColumns: `${sidebarWidth}px 6px 1fr` }}
+      className={containerClassName}
+      style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
     >
+      {isMobile && mobileListOpen ? (
+        <button
+          type="button"
+          className={styles.drawerBackdrop}
+          onClick={() => setMobileListOpen(false)}
+          aria-label="关闭笔记列表"
+        />
+      ) : null}
+
       {/* 侧边栏 */}
-      <aside className={`${styles.sidebar} ${sidebarCollapsed ? styles.collapsed : ""}`}>
+      <aside
+        className={`${styles.sidebar} ${sidebarCollapsed && !isMobile ? styles.collapsed : ""}`}
+        role={isMobile && mobileListOpen ? "dialog" : undefined}
+        aria-modal={isMobile && mobileListOpen ? true : undefined}
+        aria-label={isMobile ? "笔记列表" : undefined}
+      >
         <div className={styles.sidebarHead}>
           <Link className={styles.backLink} href="/">← Pixelverse</Link>
-          <button
-            className={styles.collapseBtn}
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            title={sidebarCollapsed ? "展开" : "收起"}
-          >
-            {sidebarCollapsed ? "»" : "«"}
-          </button>
+          {isMobile ? (
+            <button
+              type="button"
+              className={styles.drawerCloseBtn}
+              onClick={() => setMobileListOpen(false)}
+              aria-label="关闭笔记列表"
+            >
+              <X size={16} strokeWidth={2.2} />
+            </button>
+          ) : (
+            <button
+              className={styles.collapseBtn}
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              title={sidebarCollapsed ? "展开" : "收起"}
+              type="button"
+            >
+              {sidebarCollapsed ? "»" : "«"}
+            </button>
+          )}
         </div>
 
         {!sidebarCollapsed && (
@@ -524,10 +665,13 @@ export default function NotesPage() {
               <>
                 <div className={styles.sidebarActions}>
                   <button className={styles.newBtn} onClick={createNote}>
-                    + 新建笔记
+                    <Plus size={15} strokeWidth={2.2} />
+                    <span>新建笔记</span>
                   </button>
                   <div className={styles.searchWrap}>
-                    <span className={styles.searchIcon}>⌕</span>
+                    <span className={styles.searchIcon} aria-hidden="true">
+                      <Search size={14} strokeWidth={2.2} />
+                    </span>
                     <input
                       className={styles.search}
                       type="text"
@@ -613,7 +757,10 @@ export default function NotesPage() {
               className={`${styles.trashBtn} ${viewMode === "trash" ? styles.trashActive : ""}`}
               onClick={viewMode === "trash" ? switchToNotes : switchToTrash}
             >
-              <span>{viewMode === "trash" ? "← 返回笔记" : "🗑 废纸篓"}</span>
+              <span className={styles.trashBtnLabel}>
+                <Trash2 size={14} strokeWidth={2.2} />
+                <span>{viewMode === "trash" ? "返回笔记" : "废纸篓"}</span>
+              </span>
               {viewMode === "notes" && trashList.length > 0 && (
                 <span className={styles.trashBadge}>{trashList.length}</span>
               )}
@@ -632,11 +779,24 @@ export default function NotesPage() {
         {viewMode === "trash" ? (
           <div className={styles.trashView}>
             <div className={styles.trashHeader}>
-              <div>
-                <h2 className={styles.trashTitle}>废纸篓</h2>
-                <p className={styles.trashSubtitle}>
-                  {trashList.length} 篇已删除笔记 · 30天后自动永久删除
-                </p>
+              <div className={styles.trashHeaderMain}>
+                {isMobile ? (
+                  <button
+                    type="button"
+                    className={styles.mobileListBtn}
+                    onClick={() => setMobileListOpen(true)}
+                    aria-label="打开笔记列表"
+                  >
+                    <Menu size={15} strokeWidth={2.2} />
+                    <span>列表</span>
+                  </button>
+                ) : null}
+                <div>
+                  <h2 className={styles.trashTitle}>废纸篓</h2>
+                  <p className={styles.trashSubtitle}>
+                    {trashList.length} 篇已删除笔记 · 30天后自动永久删除
+                  </p>
+                </div>
               </div>
               {trashList.length > 0 && (
                 <button
@@ -697,12 +857,25 @@ export default function NotesPage() {
         ) : activeNote ? (
           <>
             <div className={styles.editorTop}>
-              <input
-                className={styles.titleInput}
-                value={title}
-                onChange={(e) => handleTitleChange(e.target.value)}
-                placeholder="笔记标题"
-              />
+              <div className={styles.editorTopMain}>
+                {isMobile ? (
+                  <button
+                    type="button"
+                    className={styles.mobileListBtn}
+                    onClick={() => setMobileListOpen(true)}
+                    aria-label="打开笔记列表"
+                  >
+                    <Menu size={15} strokeWidth={2.2} />
+                    <span>笔记</span>
+                  </button>
+                ) : null}
+                <input
+                  className={styles.titleInput}
+                  value={title}
+                  onChange={(e) => handleTitleChange(e.target.value)}
+                  placeholder="笔记标题"
+                />
+              </div>
               <div className={styles.editorMeta}>
                 <span className={`${styles.saveState} ${styles[saveState]}`}>
                   {saveLabel[saveState]}
@@ -726,7 +899,7 @@ export default function NotesPage() {
               onChange={handleFileSelect}
               style={{ display: "none" }}
             />
-            <div className={styles.editorBody}>
+            <div ref={editorBodyRef} className={styles.editorBody}>
               <EditorContent editor={editor} />
             </div>
             <div className={styles.editorFooter}>
@@ -738,6 +911,17 @@ export default function NotesPage() {
         ) : (
           <div className={styles.emptyEditor}>
             <div className={styles.emptyEditorInner}>
+              {isMobile ? (
+                <button
+                  type="button"
+                  className={styles.mobileListBtn}
+                  onClick={() => setMobileListOpen(true)}
+                  aria-label="打开笔记列表"
+                >
+                  <Menu size={15} strokeWidth={2.2} />
+                  <span>笔记列表</span>
+                </button>
+              ) : null}
               <span className={styles.emptyEditorIcon}>☁</span>
               <h3>Cloud Notes</h3>
               <p>选择一篇笔记，或新建一篇开始记录</p>
@@ -748,6 +932,81 @@ export default function NotesPage() {
           </div>
         )}
       </main>
+
+      <PhotoSlider
+        images={viewerImages}
+        index={viewerIndex}
+        visible={viewerVisible}
+        onIndexChange={setViewerIndex}
+        onClose={() => setViewerVisible(false)}
+        maskOpacity={0.92}
+        pullClosable
+        maskClosable
+        photoClosable={false}
+        bannerVisible={false}
+        className={styles.photoViewer}
+        maskClassName={styles.photoViewerMask}
+        photoWrapClassName={styles.photoViewerWrap}
+        photoClassName={styles.photoViewerImage}
+        overlayRender={({ index, images, onClose, onIndexChange, onScale, scale }) => (
+          <div className={styles.photoViewerOverlay}>
+            <div className={styles.photoViewerToolbar}>
+              <div className={styles.photoViewerCounter}>
+                <span>{index + 1} / {images.length}</span>
+              </div>
+              <div className={styles.photoViewerActions}>
+                {images.length > 1 ? (
+                  <>
+                    <button
+                      type="button"
+                      className={styles.photoViewerActionBtn}
+                      onClick={() => onIndexChange(index === 0 ? images.length - 1 : index - 1)}
+                      aria-label="上一张图片"
+                    >
+                      <ChevronLeft size={18} strokeWidth={2.2} />
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.photoViewerActionBtn}
+                      onClick={() => onIndexChange(index === images.length - 1 ? 0 : index + 1)}
+                      aria-label="下一张图片"
+                    >
+                      <ChevronRight size={18} strokeWidth={2.2} />
+                    </button>
+                  </>
+                ) : null}
+                <button
+                  type="button"
+                  className={styles.photoViewerActionBtn}
+                  onClick={() => onScale(Math.max(1, scale - 0.35))}
+                  aria-label="缩小图片"
+                >
+                  <ZoomOut size={18} strokeWidth={2.2} />
+                </button>
+                <button
+                  type="button"
+                  className={styles.photoViewerActionBtn}
+                  onClick={() => onScale(scale + 0.35)}
+                  aria-label="放大图片"
+                >
+                  <ZoomIn size={18} strokeWidth={2.2} />
+                </button>
+                <button
+                  type="button"
+                  className={styles.photoViewerActionBtn}
+                  onClick={onClose}
+                  aria-label="关闭预览"
+                >
+                  <X size={18} strokeWidth={2.2} />
+                </button>
+              </div>
+            </div>
+            <p className={styles.previewHint}>
+              单击图片直接进入查看器；查看器内可双指缩放、拖拽查看细节，页面不会跟着滚动或缩放。
+            </p>
+          </div>
+        )}
+      />
 
       {pendingDelete ? (
         <div className={styles.modalLayer} role="presentation">
@@ -764,7 +1023,7 @@ export default function NotesPage() {
             <span className={styles.modalTag}>Danger Zone</span>
             <h3 id="delete-note-title">删除这篇笔记？</h3>
             <p>
-              这会把"{pendingDelete.title || "无标题笔记"}"移到废纸篓。
+              这会把「{pendingDelete.title || "无标题笔记"}」移到废纸篓。
               30天后将自动永久删除。
             </p>
             <div className={styles.modalActions}>
@@ -797,7 +1056,7 @@ export default function NotesPage() {
             <span className={styles.modalTag}>Danger Zone</span>
             <h3>永久删除这篇笔记？</h3>
             <p>
-              "{pendingPermanentDelete.title || "无标题笔记"}"将被永久删除，无法恢复。
+              「{pendingPermanentDelete.title || "无标题笔记"}」将被永久删除，无法恢复。
             </p>
             <div className={styles.modalActions}>
               <button
