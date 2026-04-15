@@ -1,10 +1,9 @@
 import { collectAndFilterNews } from "./collector";
+import { runScheduledIngest } from "./scheduled";
 import type { CollectRequest, CollectResponse } from "./types";
+import type { Env } from "./worker-env";
 
-export interface Env {
-	AI: Ai;
-	SHARED_SECRET: string;
-}
+export type { Env } from "./worker-env";
 
 const handler = {
 	async fetch(request: Request, env: Env): Promise<Response> {
@@ -14,8 +13,13 @@ const handler = {
 			return Response.json({
 				ok: true,
 				service: "news-collector",
-				endpoints: ["GET /health", "POST /api/collect"],
-				note: "api endpoints require Authorization: Bearer <SHARED_SECRET>",
+				endpoints: [
+					"GET /health",
+					"POST /api/collect",
+					"scheduled: push to PIXELVERSE_BASE_URL",
+					"sources: google-news, bing-news, hacker-news, ithome-rss, 36kr-rss",
+				],
+				note: "POST /api/collect requires Authorization: Bearer <SHARED_SECRET>",
 			});
 		}
 
@@ -61,6 +65,10 @@ const handler = {
 		}
 
 		return new Response("Not Found", { status: 404 });
+	},
+
+	async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+		ctx.waitUntil(runScheduledIngest(env));
 	},
 };
 

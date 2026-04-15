@@ -11,20 +11,10 @@ type FilterView = "all" | "unread";
 type SseStatus = "connecting" | "online" | "offline";
 
 const SUGGESTED_KEYWORDS = ["AI", "大模型", "股市", "NASA", "SpaceX"];
-const MIN_REFRESH_MINUTES = process.env.NODE_ENV === "development" ? 1 : 5;
 
-function clampIntervalMinutes(value: number) {
-	return Math.min(60, Math.max(MIN_REFRESH_MINUTES, Number.isFinite(value) ? value : 10));
-}
-
-function normalizeIntervalDraft(value: string) {
-	return value.replace(/[^\d]/g, "").slice(0, 2);
-}
-
-function resolveIntervalMinutes(draft: string) {
-	const parsed = Number.parseInt(draft, 10);
-	return clampIntervalMinutes(Number.isNaN(parsed) ? 10 : parsed);
-}
+const NEWS_SYNC_HINT =
+	process.env.NEXT_PUBLIC_NEWS_SYNC_HINT?.trim() ||
+	"为每15分钟采集一次。";
 
 function timeAgo(iso: string | null): string {
 	if (!iso) return "";
@@ -64,12 +54,11 @@ export default function NewsPage() {
 	const [showOriginal, setShowOriginal] = useState<Set<string>>(new Set());
 	const [sseStatus, setSseStatus] = useState<SseStatus>("connecting");
 	const [refreshing, setRefreshing] = useState(false);
-	const [lastUpdateCount, setLastUpdateCount] = useState(0);
 	const [newItemIds, setNewItemIds] = useState<Set<string>>(new Set());
-	const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
-	const [activeIntervalMinutes, setActiveIntervalMinutes] = useState(10);
-	const [intervalDraft, setIntervalDraft] = useState("10");
+	const [cloudPushEnabled, setCloudPushEnabled] = useState(true);
+	const [toastMessage, setToastMessage] = useState<string | null>(null);
 	const itemsRef = useRef<NewsItemSummary[]>([]);
+	const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	const fetchKeywords = useCallback(async () => {
 		const res = await fetch("/api/news/keywords");
@@ -78,19 +67,27 @@ export default function NewsPage() {
 		}
 	}, []);
 
+	const fetchNewsSettings = useCallback(async () => {
+		const res = await fetch("/api/news/settings");
+		if (res.ok) {
+			const data = (await res.json()) as { pushEnabled?: boolean };
+			if (typeof data.pushEnabled === "boolean") {
+				setCloudPushEnabled(data.pushEnabled);
+			}
+		}
+	}, []);
+
 	useEffect(() => {
 		void fetchKeywords();
-	}, [fetchKeywords]);
+		void fetchNewsSettings();
+	}, [fetchKeywords, fetchNewsSettings]);
 
 	useEffect(() => {
 		itemsRef.current = items;
 	}, [items]);
 
 	useEffect(() => {
-		const interval = clampIntervalMinutes(activeIntervalMinutes);
-		const es = new EventSource(
-			`/api/news/stream?autoRefresh=${autoRefreshEnabled ? "1" : "0"}&intervalMinutes=${interval}`
-		);
+		const es = new EventSource("/api/news/stream?autoRefresh=1");
 		setSseStatus("connecting");
 
 		es.addEventListener("open", () => {
@@ -125,9 +122,16 @@ export default function NewsPage() {
 					const deduped = incoming.filter((x) => !seen.has(x.id));
 					if (deduped.length > 0) {
 						setItems((prev) => [...deduped, ...prev]);
-						setLastUpdateCount(deduped.length);
 						setNewItemIds((prev) => new Set([...prev, ...deduped.map((x) => x.id)]));
 						itemsRef.current = [...deduped, ...itemsRef.current];
+						if (toastTimerRef.current) {
+							clearTimeout(toastTimerRef.current);
+						}
+						setToastMessage(`新增 ${deduped.length} 条热点`);
+						toastTimerRef.current = setTimeout(() => {
+							setToastMessage(null);
+							toastTimerRef.current = null;
+						}, 3000);
 					}
 				}
 			} finally {
@@ -147,8 +151,25 @@ export default function NewsPage() {
 
 		return () => {
 			es.close();
+			if (toastTimerRef.current) {
+				clearTimeout(toastTimerRef.current);
+			}
 		};
-	}, [autoRefreshEnabled, activeIntervalMinutes]);
+	}, []);
+
+	const toggleCloudPush = async (enabled: boolean) => {
+		const res = await fetch("/api/news/settings", {
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ pushEnabled: enabled }),
+		});
+		if (res.ok) {
+			const data = (await res.json()) as { pushEnabled?: boolean };
+			if (typeof data.pushEnabled === "boolean") {
+				setCloudPushEnabled(data.pushEnabled);
+			}
+		}
+	};
 
 	const handleDigest = async () => {
 		setDigestLoading(true);
@@ -212,9 +233,8 @@ export default function NewsPage() {
 		}
 	};
 
-	// 切换关键词时重置更新提示
+	// 切换关键词时重置新条目高亮
 	useEffect(() => {
-		setLastUpdateCount(0);
 		setNewItemIds(new Set());
 	}, [activeKeyword]);
 
@@ -223,7 +243,6 @@ export default function NewsPage() {
 		if (newItemIds.size === 0) return;
 		const timer = setTimeout(() => {
 			setNewItemIds(new Set());
-			setLastUpdateCount(0);
 		}, 30000);
 		return () => clearTimeout(timer);
 	}, [newItemIds]);
@@ -384,53 +403,26 @@ export default function NewsPage() {
 							<label className={styles.autoToggle}>
 								<input
 									type="checkbox"
-									checked={autoRefreshEnabled}
+									checked={cloudPushEnabled}
 									onChange={(e) => {
-										const enabled = e.target.checked;
-										if (enabled) {
-											const resolvedMinutes = resolveIntervalMinutes(intervalDraft);
-											setActiveIntervalMinutes(resolvedMinutes);
-											setIntervalDraft(String(resolvedMinutes));
-										}
-										setAutoRefreshEnabled(enabled);
-										if (!enabled) {
-											setRefreshing(false);
-										}
+										void toggleCloudPush(e.target.checked);
 									}}
 								/>
 								<span className={styles.switchTrack} aria-hidden="true">
 									<span className={styles.switchThumb} />
 								</span>
-								<span>自动推送</span>
+								<span>云端采集</span>
 							</label>
-							<label className={styles.intervalControl}>
-								<span>间隔</span>
-								<input
-									type="text"
-									inputMode="numeric"
-									pattern="[0-9]*"
-									value={intervalDraft}
-									onChange={(e) => {
-										setIntervalDraft(normalizeIntervalDraft(e.target.value));
-									}}
-									onBlur={() => {
-										if (autoRefreshEnabled) return;
-										setIntervalDraft(String(resolveIntervalMinutes(intervalDraft)));
-									}}
-									disabled={autoRefreshEnabled}
-									aria-label={`推送间隔分钟数，范围 ${MIN_REFRESH_MINUTES} 到 60`}
-								/>
-								<span>分钟</span>
-							</label>
+							<span className={styles.syncHint} title={NEWS_SYNC_HINT}>
+								ℹ️ {NEWS_SYNC_HINT}
+							</span>
 							<span
 								className={`${styles.sseIndicator} ${
 									sseStatus === "online" ? styles.sseOnline : styles.sseOffline
 								}`}
 							>
 								{sseStatus === "online"
-									? autoRefreshEnabled
-										? "● 自动推送中"
-										: "● 自动推送已关闭"
+									? "● 轮询中"
 									: sseStatus === "connecting"
 										? "◌ 连接中"
 										: "○ 断开"}
@@ -445,9 +437,12 @@ export default function NewsPage() {
 						</div>
 					</div>
 
-					{refreshing && <div className={styles.refreshHint}>正在拉取并过滤新内容...</div>}
-					{lastUpdateCount > 0 && !refreshing && (
-						<div className={styles.updateHint}>▲ {lastUpdateCount} 条新推送</div>
+					{refreshing && <div className={styles.refreshHint}>正在从列表同步新条目...</div>}
+
+					{toastMessage && (
+						<div className={styles.newsToast} role="status" aria-live="polite">
+							{toastMessage}
+						</div>
 					)}
 
 					{digest && (

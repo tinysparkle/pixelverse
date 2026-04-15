@@ -6,6 +6,15 @@ const DEFAULT_TOOL_LIMIT = 8;
 const GOOGLE_NEWS_MAX = 20;
 const BING_NEWS_MAX = 20;
 const HACKER_NEWS_MAX = 20;
+const CHINA_RSS_FETCH_CAP = 45;
+
+const RSS_FETCH_HEADERS = {
+	"User-Agent": "Mozilla/5.0 (compatible; PixelverseNewsCollector/1.0)",
+	Accept: "application/rss+xml, application/xml, text/xml, */*",
+} as const;
+
+const ITHOME_RSS_URL = "https://www.ithome.com/rss/";
+const KR36_RSS_URL = "https://36kr.com/feed";
 
 export async function collectAndFilterNews(ai: Ai, keywords: string[]) {
 	const normalizedKeywords = keywords.map((item) => item.trim()).filter(Boolean);
@@ -89,23 +98,20 @@ function sanitizePlan(plan: CollectionPlanStep[], keywords: string[]) {
 function buildFallbackPlan(keywords: string[]) {
 	const steps: CollectionPlanStep[] = [];
 	for (const keyword of keywords) {
-		steps.push({
-			tool: "google-news",
-			query: keyword,
-			label: keyword,
-			limit: DEFAULT_TOOL_LIMIT,
-		});
-		steps.push({
-			tool: "bing-news",
-			query: keyword,
-			label: keyword,
-			limit: DEFAULT_TOOL_LIMIT,
-		});
-		if (steps.length >= MAX_PLAN_STEPS) {
-			break;
+		const row: CollectionPlanStep[] = [
+			{ tool: "google-news", query: keyword, label: keyword, limit: DEFAULT_TOOL_LIMIT },
+			{ tool: "bing-news", query: keyword, label: keyword, limit: DEFAULT_TOOL_LIMIT },
+			{ tool: "ithome-rss", query: keyword, label: keyword, limit: DEFAULT_TOOL_LIMIT },
+			{ tool: "36kr-rss", query: keyword, label: keyword, limit: DEFAULT_TOOL_LIMIT },
+		];
+		for (const step of row) {
+			if (steps.length >= MAX_PLAN_STEPS) {
+				return steps;
+			}
+			steps.push(step);
 		}
 	}
-	return steps.slice(0, MAX_PLAN_STEPS);
+	return steps;
 }
 
 async function runPlanStep(step: CollectionPlanStep): Promise<NewsEntry[]> {
@@ -116,6 +122,10 @@ async function runPlanStep(step: CollectionPlanStep): Promise<NewsEntry[]> {
 			return fetchBingNewsSearch(step.query, step.label, step.limit ?? DEFAULT_TOOL_LIMIT);
 		case "hacker-news":
 			return fetchHackerNewsSearch(step.query, step.label, step.limit ?? DEFAULT_TOOL_LIMIT);
+		case "ithome-rss":
+			return fetchIthomeRss(step.query, step.label, step.limit ?? DEFAULT_TOOL_LIMIT);
+		case "36kr-rss":
+			return fetch36KrRss(step.query, step.label, step.limit ?? DEFAULT_TOOL_LIMIT);
 	}
 
 	return [];
@@ -123,20 +133,51 @@ async function runPlanStep(step: CollectionPlanStep): Promise<NewsEntry[]> {
 
 async function fetchGoogleNewsSearch(query: string, label: string, limit: number) {
 	const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=zh-CN&gl=CN&ceid=CN:zh-Hans`;
-	const xml = await fetchText(url, {
-		"User-Agent": "Mozilla/5.0 (compatible; PixelverseNewsCollector/1.0)",
-		Accept: "application/rss+xml, application/xml, text/xml, */*",
-	});
+	const xml = await fetchText(url, { ...RSS_FETCH_HEADERS });
 	return parseRssItems(xml, label, "google-news", Math.min(limit, GOOGLE_NEWS_MAX));
 }
 
 async function fetchBingNewsSearch(query: string, label: string, limit: number) {
 	const url = `https://www.bing.com/news/search?q=${encodeURIComponent(query)}&format=rss`;
-	const xml = await fetchText(url, {
-		"User-Agent": "Mozilla/5.0 (compatible; PixelverseNewsCollector/1.0)",
-		Accept: "application/rss+xml, application/xml, text/xml, */*",
-	});
+	const xml = await fetchText(url, { ...RSS_FETCH_HEADERS });
 	return parseRssItems(xml, label, "bing-news", Math.min(limit, BING_NEWS_MAX));
+}
+
+/** 国内综合 RSS：先多取条目，再按用户关键词过滤；过少则降级为时间序前 N 条 */
+function filterChinaEntriesByKeyword(entries: NewsEntry[], label: string, limit: number): NewsEntry[] {
+	const cap = Math.min(CHINA_RSS_FETCH_CAP, Math.max(limit * 5, limit));
+	const slice = entries.slice(0, cap);
+	const kw = label.trim();
+	if (!kw) {
+		return slice.slice(0, limit);
+	}
+
+	const haystack = (e: NewsEntry) => `${e.title} ${e.summary ?? ""}`;
+	const matches = (text: string) => {
+		const t = text.toLowerCase();
+		const k = kw.toLowerCase();
+		if (t.includes(k)) return true;
+		if (text.includes(kw)) return true;
+		return false;
+	};
+
+	const filtered = slice.filter((e) => matches(haystack(e)));
+	if (filtered.length >= Math.min(3, limit)) {
+		return filtered.slice(0, limit);
+	}
+	return slice.slice(0, limit);
+}
+
+async function fetchIthomeRss(_query: string, label: string, limit: number) {
+	const xml = await fetchText(ITHOME_RSS_URL, { ...RSS_FETCH_HEADERS });
+	const raw = parseRssItems(xml, label, "ithome.com", CHINA_RSS_FETCH_CAP);
+	return filterChinaEntriesByKeyword(raw, label, limit);
+}
+
+async function fetch36KrRss(_query: string, label: string, limit: number) {
+	const xml = await fetchText(KR36_RSS_URL, { ...RSS_FETCH_HEADERS });
+	const raw = parseRssItems(xml, label, "36kr.com", CHINA_RSS_FETCH_CAP);
+	return filterChinaEntriesByKeyword(raw, label, limit);
 }
 
 type HackerNewsSearchResponse = {

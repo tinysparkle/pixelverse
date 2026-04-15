@@ -207,15 +207,17 @@ npm run db:setup
 
 ## 热点雷达（AI 资讯聚合）
 
-热点雷达是 Pixelverse 的 AI 资讯功能模块，自动抓取 HackerNews 等来源的最新 AI 行业动态，经过智能筛选、中文翻译后呈现，并支持每日 AI 摘要生成。
+热点雷达是 Pixelverse 的 AI 资讯功能模块，由 Cloudflare Worker 聚合 Google News、Bing、Hacker News、**IT 之家**、**36 氪** 等公开源，经智能筛选、中文翻译后呈现，并支持每日 AI 摘要生成。
 
 ### 功能概览
 
-- **自动同步**：从 Cloudflare Worker 拉取最新新闻并存入数据库
+- **云端推送**：Cloudflare Worker 按 Cron 定时抓取外网资讯，经 AI 筛选后 **POST 写入** Pixelverse（应用仅需 **入站** 可达，适合无外网出站的国内机房）
 - **AI 筛选**：Worker 内置 Llama 3.1 8B，对每条新闻评分（0–1），过滤与 AI 无关的内容
 - **双语展示**：每条新闻提供中文标题 + 摘要，支持一键切换原文
-- **每日摘要**：调用智谱 GLM-4-Flash，将当日新闻按主题分组生成中文综述
-- **关键词过滤**：用户可添加自定义关键词，仅显示匹配的资讯
+- **每日摘要**：调用智谱 GLM-4-Flash（`open.bigmodel.cn`，国内线路），将当日新闻按主题分组生成中文综述
+- **关键词过滤**：用户可添加自定义关键词；Worker 使用 **全体用户启用关键词的并集** 作为抓取话题
+- **云端采集开关**：前端可关闭「云端采集」，关闭后 Worker 不再向本站写入新条目
+- **列表自动刷新**：页面通过 SSE 轮询数据库合并新条目（默认约每 2 分钟），**不**从应用服务器访问境外 Worker
 - **收藏 & 已读**：逐条标记，刷新后状态保留
 
 访问路径：登录后进入 `/news`。
@@ -225,19 +227,25 @@ npm run db:setup
 在 `.env.local` 中追加以下变量：
 
 ```env
-# Cloudflare Worker — 新闻采集服务
-CF_WORKER_URL=https://your-worker.workers.dev
-CF_WORKER_SECRET=your-worker-secret
+# Worker → Pixelverse 入站鉴权（与 news-collector 的 INGEST_SECRET 一致）
+NEWS_INGEST_SECRET=your-long-random-secret
 
-# 智谱 AI — 每日摘要生成
+# 智谱 AI — 每日摘要生成（国内域名，一般无需代理）
 ZHIPU_API_KEY=your-zhipu-api-key
 
-# 出站代理（可选，国内服务器访问 Cloudflare / 智谱 API 时使用）
+# 出站代理（可选：摘要失败或本地开发需访问外网调试时）
 # 优先级：OUTBOUND_PROXY > HTTPS_PROXY > HTTP_PROXY > ALL_PROXY
 OUTBOUND_PROXY=http://127.0.0.1:7890
+
+# 可选：热点页「同步频率」说明文案（默认已有一句提示 Cron）
+# NEXT_PUBLIC_NEWS_SYNC_HINT=热点约每 15 分钟由 Worker 同步一次
+
+# 仅本地/调试：仍可从本机「拉」Worker 的 /api/collect（生产可省略）
+# CF_WORKER_URL=https://your-worker.workers.dev
+# CF_WORKER_SECRET=与 Worker 的 SHARED_SECRET 一致
 ```
 
-如果请求 Cloudflare Worker 或智谱 API 时提示 `fetch failed`，通常是网络不通，配置 `OUTBOUND_PROXY` 后重启 `npm run dev` 即可。
+若摘要接口 `fetch failed`，多为网络问题，可配置 `OUTBOUND_PROXY` 后重启。**热点入库**不依赖应用出站访问 Worker，只要 Worker 能访问你的站点入站地址即可。
 
 ### Cloudflare Worker 部署
 
@@ -246,13 +254,15 @@ Worker 源码在项目根目录的 `news-collector/` 下。
 ```bash
 cd news-collector
 npm install
-# 在 wrangler.toml 中填写你的 Cloudflare 账号 / D1 数据库 ID
+wrangler secret put SHARED_SECRET
+wrangler secret put INGEST_SECRET   # 与 Pixelverse 的 NEWS_INGEST_SECRET 相同
+# 在 wrangler.toml 的 [vars] 或 Dashboard 中设置 PIXELVERSE_BASE_URL=https://你的站点根地址
 wrangler deploy
 ```
 
-部署完成后，Cloudflare 会提供一个 `*.workers.dev` 域名，填入 `CF_WORKER_URL`。
-
-Worker 默认每 6 小时自动触发一次采集，也可以在 Cloudflare Dashboard 手动触发，或通过下方的同步接口主动拉取。
+- **Cron**：默认 `*/15 * * * *`（每 15 分钟），见 `news-collector/wrangler.toml` 的 `[triggers]`。
+- **PIXELVERSE_BASE_URL**：Worker 将请求 `GET /api/news/worker-config` 与 `POST /api/news/ingest`，请保证防火墙/安全组允许 **Cloudflare Worker 出口** 访问你的公网 IP 或域名。
+- **手动调试**：仍可向 `POST https://<worker>/api/collect` 发送 `Authorization: Bearer <SHARED_SECRET>` 与 `{"keywords":["..."]}` 测采集逻辑。
 
 ### 数据库表
 
@@ -264,43 +274,40 @@ Worker 默认每 6 小时自动触发一次采集，也可以在 Cloudflare Dash
 | `news_bookmarks` | 用户收藏记录（user_id + news_id 联合主键） |
 | `news_read` | 用户已读记录 |
 | `news_keywords` | 用户自定义关键词 |
+| `news_settings` | 全局开关（如是否允许云端写入） |
 
 ### API 接口
 
-所有接口需登录（未登录返回 401）。
+常规新闻接口需登录（未登录返回 401）。以下 **Worker 专用** 接口使用 `Authorization: Bearer <NEWS_INGEST_SECRET>`，无需登录 Cookie。
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/api/news` | 获取新闻列表，支持 `keyword` / `source` / `bookmarked` / `unread` / `limit` / `offset` 参数 |
 | PATCH | `/api/news/[id]` | 标记已读 `{"action":"read"}` 或切换收藏 `{"action":"bookmark"}` |
-| POST | `/api/news/sync` | 从 Cloudflare Worker 拉取最新新闻存入数据库 |
+| GET | `/api/news/stream` | SSE：初始列表 + 可选「列表自动刷新」轮询 DB |
+| GET | `/api/news/settings` | 读取云端采集开关 `{ pushEnabled }` |
+| PATCH | `/api/news/settings` | 更新 `{"pushEnabled": true \| false}` |
 | POST | `/api/news/digest` | 调用智谱 GLM-4 生成当日 AI 资讯摘要 |
 | GET | `/api/news/keywords` | 获取当前用户的关键词列表 |
 | POST | `/api/news/keywords` | 添加关键词 `{"keyword":"LLM"}` |
 | DELETE | `/api/news/keywords/[id]` | 删除关键词 |
+| GET | `/api/news/worker-config` | **Worker**：返回 `pushEnabled` 与全体启用关键词并集 |
+| POST | `/api/news/ingest` | **Worker**：写入采集结果 JSON（与 Worker `CollectResponse` 一致） |
+| POST | `/api/news/refresh` | 仅开发环境：从 Worker `POST /api/collect` 拉取（需配置 `CF_WORKER_*`） |
 
 ### 常见问题
 
-**同步失败：新闻服务未配置**
+**Worker 无法写入本站**
 
-`.env.local` 缺少 `CF_WORKER_URL` 或 `CF_WORKER_SECRET`，按上方说明填写后重启。
-
-**同步失败：fetch failed**
-
-网络无法访问 Cloudflare Worker，在 `.env.local` 中配置 `OUTBOUND_PROXY` 后重启。
+检查 `NEWS_INGEST_SECRET` 与 Worker 的 `INGEST_SECRET` 是否一致、`PIXELVERSE_BASE_URL` 是否可从公网访问，以及安全组是否放行 HTTPS/HTTP 入站。
 
 **摘要生成失败**
 
-检查 `ZHIPU_API_KEY` 是否正确，或同样配置代理。智谱 API Key 可在 [open.bigmodel.cn](https://open.bigmodel.cn) 注册获取。
+检查 `ZHIPU_API_KEY` 是否正确。智谱为 **国内** 服务（`open.bigmodel.cn`），一般无需代理；若仍失败再配置 `OUTBOUND_PROXY`。API Key 可在 [open.bigmodel.cn](https://open.bigmodel.cn) 注册获取。
 
 **新闻列表为空**
 
-先手动触发一次同步：登录后点击页面右上角的 **⟳ Sync** 按钮，或直接调用：
-
-```bash
-curl -X POST http://localhost:3000/api/news/sync \
-  -H "Cookie: <your-session-cookie>"
-```
+确认已添加关键词且「云端采集」为开启；等待下一次 Worker Cron，或在开发环境使用 `POST /api/news/refresh`（需本机能访问 Worker 并配置 `CF_WORKER_URL` / `CF_WORKER_SECRET`）。
 
 ## 服务器部署
 

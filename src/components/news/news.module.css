@@ -247,6 +247,19 @@
   flex-wrap: wrap;
 }
 
+.syncHint {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(560px, 100%);
+  font-size: 0.65rem;
+  line-height: 1.4;
+  color: var(--ink-dim);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .autoToggle {
   position: relative;
   display: inline-flex;
@@ -457,8 +470,9 @@
 .cardRead:not(.cardNew) { opacity: 0.6; }
 
 .cardNew {
-  border-color: rgba(0, 200, 83, 0.34);
-  box-shadow: inset 3px 0 0 rgba(0, 200, 83, 0.7), 0 10px 24px rgba(0, 200, 83, 0.08);
+  border-color: var(--line);
+  background: linear-gradient(90deg, rgba(255, 60, 40, 0.06), var(--panel));
+  box-shadow: inset 3px 0 0 var(--accent);
   animation: newCardEntry 0.42s ease;
 }
 
@@ -468,16 +482,49 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 2.1rem;
-  padding: 0.14rem 0.34rem;
-  border: 1px solid rgba(0, 200, 83, 0.5);
-  border-radius: 999px;
-  background: rgba(0, 200, 83, 0.14);
-  color: #73ffad;
+  min-width: 1.75rem;
+  padding: 0.1rem 0.28rem;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: rgba(255, 60, 40, 0.1);
+  color: var(--accent-soft);
   font-family: var(--font-pixel), monospace;
-  font-size: 0.5rem;
-  letter-spacing: 0.08em;
-  animation: newBadgePop 0.5s ease;
+  font-size: 0.48rem;
+  letter-spacing: 0.06em;
+  animation: newBadgePop 0.45s ease;
+}
+
+.newsToast {
+  position: fixed;
+  bottom: 1.25rem;
+  left: 0;
+  right: 0;
+  z-index: 120;
+  margin-inline: auto;
+  width: max-content;
+  max-width: min(90vw, 22rem);
+  padding: 0.55rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: calc(var(--pixel) * 2);
+  background: var(--panel-strong);
+  color: var(--ink-soft);
+  font-family: var(--font-pixel), monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  animation: toastSlideIn 0.35s ease;
+  pointer-events: none;
+}
+
+@keyframes toastSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .cardMeta {

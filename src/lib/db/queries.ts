@@ -823,3 +823,43 @@ export async function deleteNewsKeyword(keywordId: string, userId: string) {
 	);
 	return result.affectedRows > 0;
 }
+
+type KeywordUnionRow = RowDataPacket & { keyword: string };
+
+type NewsSettingsRow = RowDataPacket & { push_enabled: number };
+
+/** 全体用户已启用关键词并集，大小写去重规则与 buildNewsCollectRequest 一致 */
+export async function getUnionEnabledNewsKeywordsDeduped(): Promise<string[]> {
+	const rows = await queryRows<KeywordUnionRow[]>(
+		`SELECT keyword FROM news_keywords WHERE enabled = 1`
+	);
+	const seen = new Set<string>();
+	const out: string[] = [];
+	for (const row of rows) {
+		const k = row.keyword.trim();
+		if (!k) continue;
+		const key = k.toLowerCase();
+		if (seen.has(key)) continue;
+		seen.add(key);
+		out.push(k);
+	}
+	return out;
+}
+
+export async function getNewsPushEnabled(): Promise<boolean> {
+	const rows = await queryRows<NewsSettingsRow[]>(
+		`SELECT push_enabled FROM news_settings WHERE id = 1 LIMIT 1`
+	);
+	if (!rows[0]) {
+		return true;
+	}
+	return rows[0].push_enabled === 1;
+}
+
+export async function setNewsPushEnabled(enabled: boolean) {
+	await executeStatement(
+		`INSERT INTO news_settings (id, push_enabled) VALUES (1, ?)
+		 ON DUPLICATE KEY UPDATE push_enabled = VALUES(push_enabled)`,
+		[enabled ? 1 : 0]
+	);
+}

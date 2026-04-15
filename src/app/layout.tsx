@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "@fontsource-variable/noto-serif-sc";
 import "./globals.css";
+import ScrollToTop from "@/components/ScrollToTop";
 
 const silkscreen = localFont({
   variable: "--font-pixel",
@@ -34,7 +35,10 @@ export default function RootLayout({
       lang="zh-CN"
       className={`${silkscreen.variable} ${jetbrainsMono.variable}`}
     >
-      <body>{children}</body>
+      <body>
+        {children}
+        <ScrollToTop />
+      </body>
     </html>
   );
 }

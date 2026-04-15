@@ -24,7 +24,12 @@ export interface CollectResponse {
 	toolCalls: number;
 }
 
-export type CollectionTool = "google-news" | "bing-news" | "hacker-news";
+export type CollectionTool =
+	| "google-news"
+	| "bing-news"
+	| "hacker-news"
+	| "ithome-rss"
+	| "36kr-rss";
 
 export interface CollectionPlanStep {
 	tool: CollectionTool;

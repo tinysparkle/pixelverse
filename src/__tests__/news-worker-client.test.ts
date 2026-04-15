@@ -1,8 +1,21 @@
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test, vi, afterEach } from "vitest";
 import {
 	buildNewsCollectRequest,
 	collectNewsViaWorker,
 } from "@/lib/news/worker-client";
+import { verifyNewsIngestSecret } from "@/lib/news/ingest-auth";
+import type { NextRequest } from "next/server";
+
+function makeIngestRequest(auth: string | null): NextRequest {
+	return {
+		headers: {
+			get(name: string) {
+				if (name.toLowerCase() === "authorization") return auth;
+				return null;
+			},
+		},
+	} as NextRequest;
+}
 
 describe("buildNewsCollectRequest", () => {
 	test("只发送已启用的原始关键词，不再拼接扩展词缓存", () => {
@@ -101,5 +114,26 @@ describe("collectNewsViaWorker", () => {
 				publishedAt: null,
 			}),
 		]);
+	});
+});
+
+describe("verifyNewsIngestSecret", () => {
+	afterEach(() => {
+		vi.unstubAllEnvs();
+	});
+
+	test("未配置 NEWS_INGEST_SECRET 时拒绝", () => {
+		vi.stubEnv("NEWS_INGEST_SECRET", "");
+		expect(verifyNewsIngestSecret(makeIngestRequest("Bearer x"))).toBe(false);
+	});
+
+	test("Bearer 一致时通过", () => {
+		vi.stubEnv("NEWS_INGEST_SECRET", "secret-one");
+		expect(verifyNewsIngestSecret(makeIngestRequest("Bearer secret-one"))).toBe(true);
+	});
+
+	test("Bearer 不一致时拒绝", () => {
+		vi.stubEnv("NEWS_INGEST_SECRET", "secret-one");
+		expect(verifyNewsIngestSecret(makeIngestRequest("Bearer other"))).toBe(false);
 	});
 });

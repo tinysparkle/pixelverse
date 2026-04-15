@@ -32,6 +32,8 @@ Available tools:
 1. "google-news" - Google News RSS search, broad coverage, good for mainstream global news
 2. "bing-news" - Bing News RSS search, useful as a second public search source
 3. "hacker-news" - Hacker News public search, useful for developer, startup, AI, and product launches
+4. "ithome-rss" - IT之家 (ithome.com) China tech RSS; fixed feed, use same keyword in "query" and "label" for filtering hints
+5. "36kr-rss" - 36氪 China startup/tech RSS; fixed feed, same as ithome-rss for query/label
 
 Rules:
 - Expand Chinese keywords into useful English aliases, product names, abbreviations, or brand names when helpful
@@ -92,7 +94,9 @@ Example:
 		if (
 			(tool !== "google-news" &&
 				tool !== "bing-news" &&
-				tool !== "hacker-news") ||
+				tool !== "hacker-news" &&
+				tool !== "ithome-rss" &&
+				tool !== "36kr-rss") ||
 			typeof query !== "string" ||
 			typeof label !== "string"
 		) {
