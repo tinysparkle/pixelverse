@@ -12,7 +12,6 @@
     "db:push": "tsx scripts/db-push.ts",
     "db:migrate": "tsx scripts/db-migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
-    "db:seed:news": "tsx scripts/seed-news.ts",
     "db:setup": "npm run db:push && npm run db:migrate && npm run db:seed"
   },
   "dependencies": {

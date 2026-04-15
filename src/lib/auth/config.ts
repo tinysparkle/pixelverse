@@ -6,11 +6,7 @@ const authConfig = {
     signIn: "/login",
   },
   callbacks: {
-    authorized: async ({ auth, request }) => {
-      const p = request.nextUrl.pathname;
-      if (p === "/api/news/worker-config" || p === "/api/news/ingest") {
-        return true;
-      }
+    authorized: async ({ auth }) => {
       return !!auth;
     },
   },

@@ -10,7 +10,7 @@
 ## 命名规范
 
 - 文件名格式：`YYYYMMDD_序号_动作_对象.sql`
-- 示例：`20260414_001_add_news_keywords_expanded_keywords.sql`
+- 示例：`20260415_002_drop_news_tables.sql`
 
 ## 编写规则
 

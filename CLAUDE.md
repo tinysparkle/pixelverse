@@ -110,7 +110,8 @@ npm run db:seed      # 创建开发账号 admin/123456
 ### 数据库
 
 - 不使用 ORM，所有查询在 `src/lib/db/queries.ts` 中用 mysql2/promise 手写
-- 表结构变更只修改 `sql/schema.sql`，然后 `npm run db:push`
+- 表结构变更只修改 `sql/schema.sql`，然后 `npm run db:push`（仅会 `CREATE`，不会删除已有表）
+- 从 schema 中移除表时，需在 `migrations/` 增加 `DROP TABLE` 迁移并执行 `npm run db:migrate`
 - 主键使用 UUID
 - 笔记同时存储 `content_json` (Tiptap JSON，用于渲染) 和 `content_text` (纯文本，用于搜索)
 - 软删除: `deleted_at` 为 NULL 表示未删除，查询时 `WHERE deleted_at IS NULL`
@@ -173,7 +174,7 @@ npm run db:seed      # 创建开发账号 admin/123456
 
 ## 规划中的功能
 
-- 热点雷达 (Hot Radar)
+- 待定
 
 ## 注意事项
 
