@@ -28,7 +28,9 @@
 .container {
   display: grid;
   grid-template-columns: var(--sidebar-width, 280px) 6px 1fr;
-  min-height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   background: var(--bg);
   transition: grid-template-columns 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -45,6 +47,7 @@
 .sidebar {
   display: flex;
   flex-direction: column;
+  min-height: 0;
   border-right: 1px solid var(--line);
   background: linear-gradient(180deg, rgba(24, 24, 24, 0.99), rgba(14, 14, 14, 1));
   overflow: hidden;
@@ -182,6 +185,7 @@
 .list {
   flex: 1;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* ── 笔记列表项 ── */
@@ -289,18 +293,23 @@
 .editor {
   display: flex;
   flex-direction: column;
-  background: var(--bg);
+  min-height: 0;
   min-width: 0;
+  overflow: hidden;
+  background: var(--bg);
 }
 
 .editorTop {
+  position: sticky;
+  top: 0;
+  z-index: 6;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
   padding: 0.85rem 1.8rem;
   border-bottom: 1px solid var(--line);
-  background: rgba(10, 10, 10, 0.2);
+  background: rgba(10, 10, 10, 0.96);
 }
 
 .editorTopMain {
@@ -433,6 +442,9 @@
 
 /* ── 工具栏 ── */
 .toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
   display: flex;
   align-items: center;
   gap: 0.15rem;
@@ -481,6 +493,7 @@
   flex: 1;
   padding: 1.8rem 2.4rem;
   overflow-y: auto;
+  overscroll-behavior: contain;
   background: linear-gradient(180deg, rgba(26, 26, 26, 0.4), rgba(10, 10, 10, 0));
 }
 
@@ -1173,6 +1186,7 @@
   flex-direction: column;
   flex: 1;
   overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .trashHeader {
