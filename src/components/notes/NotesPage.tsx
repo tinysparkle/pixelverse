@@ -32,6 +32,7 @@ import {
   type ToolbarButtonId,
   sanitizeToolbarButtonIds,
 } from "./toolbarConfig";
+import { lockViewerScroll } from "./viewerScrollLock";
 
 interface NoteItem {
   id: string;
@@ -401,6 +402,8 @@ export default function NotesPage() {
       return;
     }
 
+    const unlockViewerScroll = lockViewerScroll();
+
     const jobId = ++ocrJobRef.current;
     setOcrStatus("loading");
     setOcrResult(null);
@@ -418,6 +421,10 @@ export default function NotesPage() {
         setOcrError(error instanceof Error ? error.message : "识别失败，请稍后重试");
         setOcrStatus("error");
       });
+
+    return () => {
+      unlockViewerScroll();
+    };
   }, [currentViewerImage?.src, viewerVisible]);
 
   useEffect(() => {
