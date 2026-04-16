@@ -441,10 +441,13 @@
 }
 
 /* ── 工具栏 ── */
-.toolbar {
+.toolbarWrap {
   position: sticky;
   top: 0;
   z-index: 5;
+}
+
+.toolbar {
   display: flex;
   align-items: center;
   gap: 0.15rem;
@@ -486,6 +489,44 @@
   height: 18px;
   background: var(--line);
   margin: 0 0.4rem;
+}
+
+.toolbarSettingsBtn {
+  margin-left: auto;
+}
+
+.toolbarSettingsPanel {
+  border-bottom: 1px solid var(--line);
+  background: rgba(10, 10, 10, 0.94);
+  padding: 0.7rem 1.8rem 0.8rem;
+}
+
+.toolbarSettingsTitle {
+  margin: 0;
+  font-family: var(--font-pixel), monospace;
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-dim);
+}
+
+.toolbarSettingsGrid {
+  margin-top: 0.6rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 0.42rem 0.55rem;
+}
+
+.toolbarOption {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.74rem;
+  color: var(--ink-soft);
+}
+
+.toolbarOption input {
+  accent-color: var(--accent);
 }
 
 /* ── 编辑器主体 ── */

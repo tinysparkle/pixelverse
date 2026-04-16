@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef, type CSSProperties } from "react";
+import { Fragment, useState, useCallback, useEffect, useRef, type CSSProperties } from "react";
 import Link from "next/link";
 import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -25,6 +25,13 @@ import {
   isPureUrlText,
   resolveInitialImageWidth,
 } from "./editorUtils";
+import {
+  DEFAULT_TOOLBAR_BUTTON_IDS,
+  TOOLBAR_BUTTON_REGISTRY,
+  TOOLBAR_STORAGE_KEY,
+  type ToolbarButtonId,
+  sanitizeToolbarButtonIds,
+} from "./toolbarConfig";
 
 interface NoteItem {
   id: string;
@@ -71,55 +78,169 @@ async function uploadImage(file: File): Promise<string | null> {
 function Toolbar({
   editor,
   onImageUpload,
+  selectedButtonIds,
+  onToggleSettings,
+  settingsOpen,
+  onButtonToggle,
 }: {
   editor: Editor | null;
   onImageUpload: () => void;
+  selectedButtonIds: ToolbarButtonId[];
+  onToggleSettings: () => void;
+  settingsOpen: boolean;
+  onButtonToggle: (id: ToolbarButtonId, checked: boolean) => void;
 }) {
   if (!editor) return null;
-  const btn = (
-    label: React.ReactNode,
-    action: () => void,
-    active: boolean,
-    title: string,
-    shortcut?: string
-  ) => (
-    <button
-      className={`${styles.tbBtn} ${active ? styles.tbActive : ""}`}
-      onClick={action}
-      title={shortcut ? `${title} (${shortcut})` : title}
-      type="button"
-    >
-      {label}
-    </button>
-  );
 
   const e = editor;
+  const selectedSet = new Set(selectedButtonIds);
+
+  const buttonActions: Record<ToolbarButtonId, { action: () => void; active: boolean }> = {
+    undo: {
+      action: () => e.chain().focus().undo().run(),
+      active: false,
+    },
+    redo: {
+      action: () => e.chain().focus().redo().run(),
+      active: false,
+    },
+    bold: {
+      action: () => e.chain().focus().toggleBold().run(),
+      active: e.isActive("bold"),
+    },
+    italic: {
+      action: () => e.chain().focus().toggleItalic().run(),
+      active: e.isActive("italic"),
+    },
+    strike: {
+      action: () => e.chain().focus().toggleStrike().run(),
+      active: e.isActive("strike"),
+    },
+    code: {
+      action: () => e.chain().focus().toggleCode().run(),
+      active: e.isActive("code"),
+    },
+    codeBlock: {
+      action: () => e.chain().focus().toggleCodeBlock().run(),
+      active: e.isActive("codeBlock"),
+    },
+    heading1: {
+      action: () => e.chain().focus().toggleHeading({ level: 1 }).run(),
+      active: e.isActive("heading", { level: 1 }),
+    },
+    heading2: {
+      action: () => e.chain().focus().toggleHeading({ level: 2 }).run(),
+      active: e.isActive("heading", { level: 2 }),
+    },
+    heading3: {
+      action: () => e.chain().focus().toggleHeading({ level: 3 }).run(),
+      active: e.isActive("heading", { level: 3 }),
+    },
+    bulletList: {
+      action: () => e.chain().focus().toggleBulletList().run(),
+      active: e.isActive("bulletList"),
+    },
+    orderedList: {
+      action: () => e.chain().focus().toggleOrderedList().run(),
+      active: e.isActive("orderedList"),
+    },
+    blockquote: {
+      action: () => e.chain().focus().toggleBlockquote().run(),
+      active: e.isActive("blockquote"),
+    },
+    horizontalRule: {
+      action: () => e.chain().focus().setHorizontalRule().run(),
+      active: false,
+    },
+    link: {
+      action: () => {
+        const currentHref = e.getAttributes("link").href as string | undefined;
+        const input = window.prompt("输入链接 URL", currentHref ?? "https://");
+        if (!input) return;
+        const href = input.trim();
+        if (!href) return;
+        e.chain().focus().setLink({ href }).run();
+      },
+      active: e.isActive("link"),
+    },
+    unlink: {
+      action: () => e.chain().focus().unsetLink().run(),
+      active: false,
+    },
+    image: {
+      action: onImageUpload,
+      active: false,
+    },
+  };
+
+  const groupedItems = TOOLBAR_BUTTON_REGISTRY.reduce<Record<string, typeof TOOLBAR_BUTTON_REGISTRY>>((acc, item) => {
+    if (!selectedSet.has(item.id)) return acc;
+    if (!acc[item.group]) acc[item.group] = [];
+    acc[item.group].push(item);
+    return acc;
+  }, {});
+
+  const orderedGroups = ["history", "inline", "heading", "block", "link", "media"] as const;
 
   return (
-    <div className={styles.toolbar}>
-      <div className={styles.tbGroup}>
-        {btn("B", () => e.chain().focus().toggleBold().run(), e.isActive("bold"), "粗体", "⌘B")}
-        {btn("I", () => e.chain().focus().toggleItalic().run(), e.isActive("italic"), "斜体", "⌘I")}
-        {btn("S", () => e.chain().focus().toggleStrike().run(), e.isActive("strike"), "删除线", "⌘⇧X")}
-        {btn("~", () => e.chain().focus().toggleCode().run(), e.isActive("code"), "行内代码", "⌘E")}
+    <div className={styles.toolbarWrap}>
+      <div className={styles.toolbar}>
+        {orderedGroups.map((group) => {
+          const items = groupedItems[group] ?? [];
+          if (!items.length) return null;
+          return (
+            <Fragment key={group}>
+              <div className={styles.tbGroup}>
+                {items.map((item) => {
+                  const renderLabel = item.id === "image"
+                    ? <ImagePlus size={16} strokeWidth={2.2} />
+                    : item.label;
+
+                  return (
+                    <button
+                      key={item.id}
+                      className={`${styles.tbBtn} ${buttonActions[item.id].active ? styles.tbActive : ""}`}
+                      onClick={buttonActions[item.id].action}
+                      title={item.shortcut ? `${item.title} (${item.shortcut})` : item.title}
+                      type="button"
+                    >
+                      {renderLabel}
+                    </button>
+                  );
+                })}
+              </div>
+              <span className={styles.tbDivider} />
+            </Fragment>
+          );
+        })}
+        <button
+          type="button"
+          className={`${styles.tbBtn} ${styles.toolbarSettingsBtn}`}
+          onClick={onToggleSettings}
+          title="自定义工具栏"
+          aria-expanded={settingsOpen}
+        >
+          ⚙ 工具
+        </button>
       </div>
-      <span className={styles.tbDivider} />
-      <div className={styles.tbGroup}>
-        {btn("H1", () => e.chain().focus().toggleHeading({ level: 1 }).run(), e.isActive("heading", { level: 1 }), "标题 1", "⌘⌥1")}
-        {btn("H2", () => e.chain().focus().toggleHeading({ level: 2 }).run(), e.isActive("heading", { level: 2 }), "标题 2", "⌘⌥2")}
-        {btn("H3", () => e.chain().focus().toggleHeading({ level: 3 }).run(), e.isActive("heading", { level: 3 }), "标题 3", "⌘⌥3")}
-      </div>
-      <span className={styles.tbDivider} />
-      <div className={styles.tbGroup}>
-        {btn("•", () => e.chain().focus().toggleBulletList().run(), e.isActive("bulletList"), "无序列表", "⌘⇧8")}
-        {btn("1.", () => e.chain().focus().toggleOrderedList().run(), e.isActive("orderedList"), "有序列表", "⌘⇧7")}
-        {btn("｜", () => e.chain().focus().toggleBlockquote().run(), e.isActive("blockquote"), "引用", "⌘⇧B")}
-        {btn("—", () => e.chain().focus().setHorizontalRule().run(), false, "分隔线")}
-      </div>
-      <span className={styles.tbDivider} />
-      <div className={styles.tbGroup}>
-        {btn(<ImagePlus size={16} strokeWidth={2.2} />, onImageUpload, false, "插入图片")}
-      </div>
+
+      {settingsOpen ? (
+        <div className={styles.toolbarSettingsPanel}>
+          <p className={styles.toolbarSettingsTitle}>选择要显示的工具按钮</p>
+          <div className={styles.toolbarSettingsGrid}>
+            {TOOLBAR_BUTTON_REGISTRY.map((item) => (
+              <label key={item.id} className={styles.toolbarOption}>
+                <input
+                  type="checkbox"
+                  checked={selectedSet.has(item.id)}
+                  onChange={(event) => onButtonToggle(item.id, event.target.checked)}
+                />
+                <span>{item.title}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -150,6 +271,8 @@ export default function NotesPage() {
   const [ocrError, setOcrError] = useState("");
   const [isMobile, setIsMobile] = useState(false);
   const [mobileListOpen, setMobileListOpen] = useState(false);
+  const [toolbarButtonIds, setToolbarButtonIds] = useState<ToolbarButtonId[]>([...DEFAULT_TOOLBAR_BUTTON_IDS]);
+  const [toolbarSettingsOpen, setToolbarSettingsOpen] = useState(false);
   const isResizing = useRef(false);
   const resizeStartX = useRef(0);
   const resizeStartWidth = useRef(280);
@@ -427,8 +550,41 @@ export default function NotesPage() {
   }, []);
 
   useEffect(() => {
+    const raw = window.localStorage.getItem(TOOLBAR_STORAGE_KEY);
+    if (!raw) {
+      setToolbarButtonIds([...DEFAULT_TOOLBAR_BUTTON_IDS]);
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed)) {
+        setToolbarButtonIds([...DEFAULT_TOOLBAR_BUTTON_IDS]);
+        return;
+      }
+
+      const sanitized = sanitizeToolbarButtonIds(parsed.map((item) => String(item)));
+      setToolbarButtonIds(sanitized);
+    } catch {
+      setToolbarButtonIds([...DEFAULT_TOOLBAR_BUTTON_IDS]);
+    }
+  }, []);
+
+  useEffect(() => {
     if (isMobile) setSidebarCollapsed(false);
   }, [isMobile]);
+
+  const handleToolbarButtonToggle = useCallback((id: ToolbarButtonId, checked: boolean) => {
+    setToolbarButtonIds((previous) => {
+      const nextCandidate = checked
+        ? [...previous, id]
+        : previous.filter((item) => item !== id);
+
+      const sanitized = sanitizeToolbarButtonIds(nextCandidate);
+      window.localStorage.setItem(TOOLBAR_STORAGE_KEY, JSON.stringify(sanitized));
+      return sanitized;
+    });
+  }, []);
 
   // 关键修复：切换笔记 — 内联 fetch，加容错
   const switchNote = async (id: string) => {
@@ -934,7 +1090,14 @@ export default function NotesPage() {
                 </button>
               </div>
             </div>
-            <Toolbar editor={editor} onImageUpload={handleImageUpload} />
+            <Toolbar
+              editor={editor}
+              onImageUpload={handleImageUpload}
+              selectedButtonIds={toolbarButtonIds}
+              settingsOpen={toolbarSettingsOpen}
+              onToggleSettings={() => setToolbarSettingsOpen((open) => !open)}
+              onButtonToggle={handleToolbarButtonToggle}
+            />
             <input
               ref={fileInputRef}
               type="file"
