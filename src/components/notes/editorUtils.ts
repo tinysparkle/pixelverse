@@ -35,26 +35,9 @@ export function formatUrlDisplayText(url: string, maxLength = 36): string {
     const secondLevel = parts.length > 1 ? parts[parts.length - 2] : parts[0];
     const normalized = secondLevel.toLowerCase();
 
-    const siteNameMap: Record<string, string> = {
-      github: "GitHub",
-      gitlab: "GitLab",
-      x: "X",
-      twitter: "X",
-      youtube: "YouTube",
-      bilibili: "Bilibili",
-      google: "Google",
-      zhihu: "知乎",
-      juejin: "稀土掘金",
-      medium: "Medium",
-      stackoverflow: "Stack Overflow",
-      reddit: "Reddit",
-      wikipedia: "Wikipedia",
-    };
-
-    const fallbackName = normalized
+    const siteName = normalized
       ? normalized.charAt(0).toUpperCase() + normalized.slice(1)
       : "";
-    const siteName = siteNameMap[normalized] ?? fallbackName;
 
     const display = siteName ? `${siteName} · ${domain}` : domain;
     if (display.length <= maxLength) return display;
