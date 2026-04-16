@@ -29,9 +29,36 @@ export function isPureUrlText(text: string): boolean {
 export function formatUrlDisplayText(url: string, maxLength = 36): string {
   try {
     const parsed = new URL(url);
-    const raw = `${parsed.host}${parsed.pathname}${parsed.search}`;
-    if (raw.length <= maxLength) return raw;
-    return `${raw.slice(0, maxLength - 1)}…`;
+    const domain = parsed.hostname.replace(/^www\./i, "");
+
+    const parts = domain.split(".");
+    const secondLevel = parts.length > 1 ? parts[parts.length - 2] : parts[0];
+    const normalized = secondLevel.toLowerCase();
+
+    const siteNameMap: Record<string, string> = {
+      github: "GitHub",
+      gitlab: "GitLab",
+      x: "X",
+      twitter: "X",
+      youtube: "YouTube",
+      bilibili: "Bilibili",
+      google: "Google",
+      zhihu: "知乎",
+      juejin: "稀土掘金",
+      medium: "Medium",
+      stackoverflow: "Stack Overflow",
+      reddit: "Reddit",
+      wikipedia: "Wikipedia",
+    };
+
+    const fallbackName = normalized
+      ? normalized.charAt(0).toUpperCase() + normalized.slice(1)
+      : "";
+    const siteName = siteNameMap[normalized] ?? fallbackName;
+
+    const display = siteName ? `${siteName} · ${domain}` : domain;
+    if (display.length <= maxLength) return display;
+    return `${display.slice(0, maxLength - 1)}…`;
   } catch {
     const fallback = url.trim();
     if (fallback.length <= maxLength) return fallback;

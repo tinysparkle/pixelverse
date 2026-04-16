@@ -17,10 +17,13 @@ describe("notes editor utils", () => {
     expect(isPureUrlText("javascript:alert(1)")).toBe(false);
   });
 
-  it("将长 URL 格式化为短文本", () => {
-    const display = formatUrlDisplayText("https://example.com/some/really/long/path?query=123");
-    expect(display.startsWith("example.com/")).toBe(true);
-    expect(display.length).toBeLessThanOrEqual(36);
+  it("将 URL 格式化为站点名和域名", () => {
+    expect(formatUrlDisplayText("https://github.com/owner/repo/issues/1")).toBe("GitHub · github.com");
+    expect(formatUrlDisplayText("https://sub.example.com/a/b?x=1")).toBe("Example · sub.example.com");
+
+    const invalidDisplay = formatUrlDisplayText("not-a-valid-url-for-display-text");
+    expect(invalidDisplay.startsWith("not-a-valid-url")).toBe(true);
+    expect(invalidDisplay.length).toBeLessThanOrEqual(36);
   });
 
   it("限制图片宽度范围", () => {
