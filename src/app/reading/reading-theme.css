@@ -1,0 +1,33 @@
+.readingTheme {
+  --bg: #f7f2e7;
+  --bg-soft: #efe8d7;
+  --panel: #fffdf7;
+  --panel-strong: #f1ead8;
+  --panel-elevated: #ece1cc;
+  --ink: #2a2623;
+  --ink-soft: #4f4841;
+  --ink-dim: #8a8178;
+  --accent: #2f5d8a;
+  --accent-soft: #c9a24a;
+  --accent-glow: rgba(47, 93, 138, 0.18);
+  --accent-soft-glow: rgba(201, 162, 74, 0.22);
+  --success: #5c8a61;
+  --line: rgba(42, 38, 35, 0.1);
+  --line-strong: rgba(42, 38, 35, 0.18);
+  --shadow: 0 14px 38px rgba(80, 60, 30, 0.1);
+  --shadow-accent: 0 18px 48px rgba(47, 93, 138, 0.12);
+  --mark-word: #f3d86b;
+  --mark-phrase: #b5d8b5;
+  --font-prose: var(--font-serif), Georgia, "Noto Serif SC", serif;
+  min-height: 100vh;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at top left, rgba(201, 162, 74, 0.18), transparent 30%),
+    radial-gradient(circle at right 20%, rgba(47, 93, 138, 0.12), transparent 28%),
+    linear-gradient(180deg, #fbf7ef 0%, #f7f2e7 48%, #f0e8d8 100%);
+}
+
+.readingTheme::selection {
+  background: rgba(47, 93, 138, 0.18);
+  color: var(--ink);
+}

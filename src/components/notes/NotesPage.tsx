@@ -843,7 +843,12 @@ export default function NotesPage() {
         aria-label={isMobile ? "笔记列表" : undefined}
       >
         <div className={styles.sidebarHead}>
-          <Link className={styles.backLink} href="/">← Pixelverse</Link>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem" }}>
+            <Link className={styles.backLink} href="/">← Pixelverse</Link>
+            <Link className={styles.backLink} href="/reading">阅读训练</Link>
+            <Link className={styles.backLink} href="/reading/vocab">生词本</Link>
+            <Link className={styles.backLink} href="/reading/review">今日复习</Link>
+          </div>
           {isMobile ? (
             <button
               type="button"

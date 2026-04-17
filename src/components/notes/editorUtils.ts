@@ -35,8 +35,12 @@ export function formatUrlDisplayText(url: string, maxLength = 36): string {
     const secondLevel = parts.length > 1 ? parts[parts.length - 2] : parts[0];
     const normalized = secondLevel.toLowerCase();
 
+    const siteNameMap: Record<string, string> = {
+      github: "GitHub",
+    };
+
     const siteName = normalized
-      ? normalized.charAt(0).toUpperCase() + normalized.slice(1)
+      ? (siteNameMap[normalized] ?? `${normalized.charAt(0).toUpperCase()}${normalized.slice(1)}`)
       : "";
 
     const display = siteName ? `${siteName} · ${domain}` : domain;

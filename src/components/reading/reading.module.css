@@ -1,0 +1,385 @@
+.layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 280px) minmax(0, 1fr) minmax(220px, 280px);
+  gap: 20px;
+  align-items: start;
+}
+
+.panel,
+.sidebar,
+.readerPanel,
+.aside {
+  background: rgba(255, 253, 247, 0.88);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+}
+
+.sidebar,
+.aside {
+  position: sticky;
+  top: 110px;
+  padding: 18px;
+}
+
+.readerPanel {
+  padding: 22px;
+}
+
+.panelTitle {
+  font-family: var(--font-pixel), monospace;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+
+.section {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.select,
+.input,
+.textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 11px 12px;
+  color: var(--ink);
+  background: rgba(255, 253, 247, 0.9);
+  font: inherit;
+}
+
+.textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+
+.primaryBtn,
+.secondaryBtn,
+.ghostBtn {
+  border: 0;
+  border-radius: 14px;
+  padding: 11px 14px;
+  font: inherit;
+  cursor: pointer;
+  transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+.primaryBtn {
+  color: white;
+  background: var(--accent);
+  box-shadow: var(--shadow-accent);
+}
+
+.secondaryBtn {
+  color: var(--ink);
+  background: rgba(47, 93, 138, 0.1);
+}
+
+.ghostBtn {
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px solid var(--line);
+}
+
+.primaryBtn:disabled,
+.secondaryBtn:disabled,
+.ghostBtn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.primaryBtn:not(:disabled):hover,
+.secondaryBtn:not(:disabled):hover,
+.ghostBtn:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+
+.articleList {
+  display: grid;
+  gap: 10px;
+}
+
+.articleCard {
+  display: grid;
+  gap: 6px;
+  border: 1px solid transparent;
+  border-radius: 18px;
+  padding: 14px;
+  text-align: left;
+  color: inherit;
+  background: rgba(239, 232, 215, 0.68);
+  cursor: pointer;
+}
+
+.articleCard:hover {
+  border-color: rgba(47, 93, 138, 0.18);
+}
+
+.articleActive {
+  border-color: rgba(47, 93, 138, 0.32);
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.articleTitle {
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.articleMeta,
+.articleExcerpt,
+.muted,
+.empty {
+  color: var(--ink-dim);
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.statusText {
+  color: var(--ink-soft);
+  font-size: 0.96rem;
+}
+
+.articleWrap {
+  display: grid;
+  gap: 20px;
+}
+
+.articleHeader {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.articleHeading {
+  font-size: clamp(1.8rem, 3vw, 2.5rem);
+  line-height: 1.2;
+}
+
+.articleBody {
+  max-width: 68ch;
+  margin: 0 auto;
+  color: var(--ink);
+  font-family: var(--font-prose);
+  font-size: 18px;
+  line-height: 1.9;
+  user-select: text;
+}
+
+.paragraph {
+  margin: 0 0 1.2rem;
+  white-space: pre-wrap;
+}
+
+.textChunk,
+.mark {
+  white-space: pre-wrap;
+}
+
+.mark {
+  padding: 0 0.06em;
+  border-radius: 0.35em;
+  color: inherit;
+}
+
+.annotatedText {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding-top: 0.78em;
+}
+
+.glossText {
+  position: absolute;
+  top: 0.04em;
+  left: 0;
+  white-space: nowrap;
+  color: var(--accent);
+  font-size: 0.62em;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0;
+  user-select: none;
+  pointer-events: none;
+}
+
+.wordMark {
+  background: color-mix(in srgb, var(--mark-word) 72%, white);
+}
+
+.phraseMark {
+  background: color-mix(in srgb, var(--mark-phrase) 76%, white);
+}
+
+.focusMark {
+  box-shadow: 0 0 0 2px rgba(47, 93, 138, 0.28);
+  animation: flashFocus 1.2s ease;
+}
+
+.vocabList {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.vocabItem {
+  display: grid;
+  gap: 6px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  text-align: left;
+  background: rgba(239, 232, 215, 0.52);
+  color: inherit;
+  cursor: pointer;
+}
+
+.vocabItem:hover {
+  border-color: rgba(47, 93, 138, 0.18);
+}
+
+.badgeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 9px;
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+  background: rgba(47, 93, 138, 0.12);
+}
+
+.badgeWord {
+  background: rgba(243, 216, 107, 0.45);
+}
+
+.badgePhrase {
+  background: rgba(181, 216, 181, 0.52);
+}
+
+.popover {
+  --popover-bg: #fffdf7;
+  --popover-ink: #2a2623;
+  --popover-ink-soft: #4f4841;
+  --popover-line: rgba(42, 38, 35, 0.1);
+  --popover-accent: rgba(47, 93, 138, 0.1);
+  width: min(320px, calc(100vw - 24px));
+  padding: 12px;
+  color: var(--popover-ink);
+  border: 1px solid rgba(42, 38, 35, 0.12);
+  border-radius: 18px;
+  background: rgba(255, 253, 247, 0.98);
+  box-shadow: 0 20px 60px rgba(46, 36, 22, 0.16);
+}
+
+.popoverText {
+  margin-bottom: 10px;
+  color: var(--popover-ink-soft);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.popoverActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.popover .secondaryBtn,
+.popover .ghostBtn {
+  color: var(--popover-ink);
+}
+
+.popover .secondaryBtn {
+  background: var(--popover-accent);
+}
+
+.popover .ghostBtn {
+  border-color: var(--popover-line);
+}
+
+.popover .textarea {
+  color: var(--popover-ink);
+  background: var(--popover-bg);
+  border-color: var(--popover-line);
+}
+
+.popover .textarea::placeholder {
+  color: rgba(79, 72, 65, 0.66);
+}
+
+.practiceCard {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.questionList {
+  display: grid;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.questionCard {
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(239, 232, 215, 0.54);
+}
+
+.choices {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.choice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+@keyframes flashFocus {
+  from {
+    box-shadow: 0 0 0 0 rgba(47, 93, 138, 0.28);
+  }
+  to {
+    box-shadow: 0 0 0 6px rgba(47, 93, 138, 0);
+  }
+}
+
+@media (max-width: 1200px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar,
+  .aside {
+    position: static;
+  }
+}

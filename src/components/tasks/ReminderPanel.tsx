@@ -33,17 +33,15 @@ export default function ReminderPanel({
 }) {
   const [open, setOpen] = useState(false);
   const [tasks, setTasks] = useState(initialTasks);
-  const [days, setDays] = useState(DEFAULT_DAYS);
-  const [showSettings, setShowSettings] = useState(false);
-
-  // 从 localStorage 读取提醒阈值
-  useEffect(() => {
+  const [days, setDays] = useState(() => {
+    if (typeof window === "undefined") return DEFAULT_DAYS;
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const n = Number(saved);
-      if (n >= 1 && n <= 90) setDays(n);
-    }
-  }, []);
+    if (!saved) return DEFAULT_DAYS;
+
+    const value = Number(saved);
+    return value >= 1 && value <= 90 ? value : DEFAULT_DAYS;
+  });
+  const [showSettings, setShowSettings] = useState(false);
 
   // 当 days 变化时重新拉取
   useEffect(() => {

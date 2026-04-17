@@ -1,0 +1,175 @@
+.layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 360px) minmax(0, 1fr);
+  gap: 20px;
+}
+
+.panel,
+.listPanel,
+.detailPanel {
+  background: rgba(255, 253, 247, 0.88);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+  padding: 20px;
+}
+
+.filters {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.search {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(255, 253, 247, 0.9);
+  color: var(--ink);
+  font: inherit;
+}
+
+.tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tab {
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 12px;
+  color: var(--ink-soft);
+  background: rgba(47, 93, 138, 0.08);
+  cursor: pointer;
+}
+
+.tabActive {
+  color: white;
+  background: var(--accent);
+}
+
+.list {
+  display: grid;
+  gap: 10px;
+}
+
+.item {
+  display: grid;
+  gap: 8px;
+  border: 1px solid transparent;
+  border-radius: 18px;
+  padding: 14px;
+  text-align: left;
+  background: rgba(239, 232, 215, 0.58);
+  cursor: pointer;
+}
+
+.itemActive {
+  border-color: rgba(47, 93, 138, 0.24);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.row,
+.metaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 9px;
+  background: rgba(47, 93, 138, 0.1);
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+}
+
+.detailTitle {
+  font-size: clamp(1.4rem, 2vw, 2rem);
+}
+
+.muted,
+.empty,
+.contextText {
+  color: var(--ink-dim);
+  line-height: 1.6;
+}
+
+.section {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.textarea {
+  min-height: 120px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 253, 247, 0.9);
+  color: var(--ink);
+  font: inherit;
+  resize: vertical;
+}
+
+.buttonRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.primaryBtn,
+.secondaryBtn,
+.ghostBtn,
+.dangerBtn {
+  border: 0;
+  border-radius: 14px;
+  padding: 11px 14px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.primaryBtn {
+  color: white;
+  background: var(--accent);
+}
+
+.secondaryBtn {
+  color: var(--ink);
+  background: rgba(47, 93, 138, 0.1);
+}
+
+.ghostBtn {
+  color: var(--ink-soft);
+  background: transparent;
+  border: 1px solid var(--line);
+}
+
+.dangerBtn {
+  color: white;
+  background: #c15d47;
+}
+
+.contexts {
+  display: grid;
+  gap: 12px;
+}
+
+.contextCard {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(239, 232, 215, 0.46);
+}
+
+@media (max-width: 1080px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}

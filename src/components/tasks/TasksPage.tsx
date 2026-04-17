@@ -204,6 +204,9 @@ export default function TasksPage() {
         <nav className={styles.nav}>
           <Link href="/">首页</Link>
           <Link href="/notes">云笔记</Link>
+          <Link href="/reading">阅读训练</Link>
+          <Link href="/reading/vocab">生词本</Link>
+          <Link href="/reading/review">今日复习</Link>
         </nav>
       </header>
 

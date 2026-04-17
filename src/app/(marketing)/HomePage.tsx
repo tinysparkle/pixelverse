@@ -15,10 +15,8 @@ export default function HomePage({
   upcomingTasks?: TaskSummary[];
 }) {
   const [clock, setClock] = useState("");
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true);
     const tick = () => {
       const now = new Date();
       const stamp = [
@@ -38,7 +36,7 @@ export default function HomePage({
   }, []);
 
   return (
-    <main className={`${styles.page} ${mounted ? styles.entered : ""}`}>
+    <main className={`${styles.page} ${styles.entered}`}>
       {/* Decorative pixel corner accents */}
       <div className={styles.cornerTL} aria-hidden="true" />
       <div className={styles.cornerBR} aria-hidden="true" />
@@ -52,6 +50,9 @@ export default function HomePage({
         <nav className={styles.nav}>
           <Link href="/">首页</Link>
           {isAuthenticated && <Link href="/tasks">任务</Link>}
+          {isAuthenticated && <Link href="/reading">阅读训练</Link>}
+          {isAuthenticated && <Link href="/reading/vocab">生词本</Link>}
+          {isAuthenticated && <Link href="/reading/review">今日复习</Link>}
           <Link className={styles.navAccent} href={isAuthenticated ? "/notes" : "/login"}>
             <span className={styles.navDot} />
             {isAuthenticated ? "云笔记" : "登入"}
@@ -71,8 +72,8 @@ export default function HomePage({
           </h1>
           <p>一个安静的数字角落，慢慢长出自己的形状。</p>
           <div className={styles.actions}>
-            <Link className={styles.button} href={isAuthenticated ? "/notes" : "/login"}>
-              {isAuthenticated ? "继续云笔记" : "登录后进入"}
+            <Link className={styles.button} href={isAuthenticated ? "/reading" : "/login"}>
+              {isAuthenticated ? "开始阅读训练" : "登录后进入"}
               <span className={styles.buttonArrow}>→</span>
             </Link>
           </div>
