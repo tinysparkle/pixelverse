@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import ReadingPage from "@/components/reading/ReadingPage";
 
 export const metadata = {
@@ -6,5 +7,9 @@ export const metadata = {
 };
 
 export default function ReadingRoute() {
-  return <ReadingPage />;
+  return (
+    <Suspense fallback={null}>
+      <ReadingPage />
+    </Suspense>
+  );
 }

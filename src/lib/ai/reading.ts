@@ -384,7 +384,7 @@ export async function generateReadingArticle(input: {
         ].join("\n")
       : "";
 
-  const result = await createCompatibilityJson({
+  const result: ArticleOutput = await createCompatibilityJson({
     system: ARTICLE_SYSTEM_PROMPT,
     schema: articleSchema,
     example,
@@ -397,7 +397,7 @@ export async function generateReadingArticle(input: {
     ]
       .filter(Boolean)
       .join("\n\n"),
-  }) satisfies Promise<ArticleOutput>;
+  });
 
   logAiDebug("article:result", {
     title: result.title,
@@ -470,7 +470,7 @@ export async function generateContextualGloss(input: {
     gloss_cn: "误解的",
   }, null, 2);
 
-  const result = await createCompatibilityJson({
+  const result: GlossOutput = await createCompatibilityJson({
     system: GLOSS_SYSTEM_PROMPT,
     schema: glossSchema,
     example,
@@ -483,7 +483,7 @@ export async function generateContextualGloss(input: {
       `所在句子：${input.sentence}`,
       `所在段落：${input.paragraph}`,
     ].join("\n\n"),
-  }) satisfies Promise<GlossOutput>;
+  });
 
   logAiDebug("gloss:result", {
     kind: input.kind,
