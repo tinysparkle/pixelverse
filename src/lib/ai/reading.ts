@@ -219,6 +219,7 @@ async function callAiText(input: {
   prompt: string;
   maxTokens?: number;
   disableThinking?: boolean;
+  temperature?: number;
 }) {
   const url = process.env.AI_API_URL;
   const apiKey = process.env.AI_API_KEY;
@@ -236,6 +237,7 @@ async function callAiText(input: {
     model: process.env.AI_MODEL ?? null,
     maxTokens: input.maxTokens ?? 4000,
     disableThinking: input.disableThinking ?? false,
+    temperature: input.temperature ?? null,
     apiKey: maskApiKey(apiKey),
     systemPreview: truncateText(input.system, 120),
     promptPreview: truncateText(input.prompt, 240),
@@ -254,6 +256,7 @@ async function callAiText(input: {
         { role: "user", content: input.prompt },
       ],
       max_tokens: input.maxTokens ?? 4000,
+      ...(typeof input.temperature === "number" ? { temperature: input.temperature } : {}),
       ...(input.disableThinking ? { thinking: { type: "disabled" } } : {}),
     }),
     cache: "no-store",
@@ -312,6 +315,7 @@ async function repairJsonText<T>(input: {
   const repairedText = await callAiText({
     system: "你是 JSON 修复助手。",
     maxTokens: 2500,
+    disableThinking: true,
     prompt: [
       "请把下面内容整理成一个合法 JSON 对象。",
       "要求：只输出 JSON；第一字符必须是 {；最后字符必须是 }；不要 Markdown；不要解释。",
@@ -333,6 +337,7 @@ async function createCompatibilityJson<T>(input: {
   example: string;
   maxTokens?: number;
   disableThinking?: boolean;
+  temperature?: number;
 }) {
   const text = await callAiText({
     system: input.system,
@@ -344,6 +349,7 @@ async function createCompatibilityJson<T>(input: {
     ].join("\n\n"),
     maxTokens: input.maxTokens,
     disableThinking: input.disableThinking,
+    temperature: input.temperature,
   });
 
   try {
@@ -362,6 +368,9 @@ export async function generateReadingArticle(input: {
   topic: string;
   level: ReadingLevel;
   length: ReadingLengthBucket;
+  angle?: string;
+  avoidTitles?: string[];
+  avoidTopics?: string[];
   wordbookReuse?: string[];
 }) {
   const [minWords, maxWords] = getReadingWordRange(input.length);
@@ -384,16 +393,34 @@ export async function generateReadingArticle(input: {
         ].join("\n")
       : "";
 
+  const avoidTitles = input.avoidTitles?.filter((item) => item.trim()).slice(0, 6) ?? [];
+  const avoidTopics = input.avoidTopics?.filter((item) => item.trim()).slice(0, 6) ?? [];
+  const avoidBlock =
+    avoidTitles.length > 0 || avoidTopics.length > 0
+      ? [
+          "请避开用户最近刚生成过的题材和标题，不要重复写相同中心内容。",
+          avoidTitles.length > 0 ? `最近标题：${avoidTitles.map((item) => JSON.stringify(item)).join("、")}` : "",
+          avoidTopics.length > 0 ? `最近主题：${avoidTopics.map((item) => JSON.stringify(item)).join("、")}` : "",
+        ]
+          .filter(Boolean)
+          .join("\n")
+      : "";
+
   const result: ArticleOutput = await createCompatibilityJson({
     system: ARTICLE_SYSTEM_PROMPT,
     schema: articleSchema,
     example,
     maxTokens: 4000,
+    disableThinking: true,
+    temperature: 0.9,
     prompt: [
       `请生成一篇适合 ${input.level} 水平英语阅读训练的英文文章。`,
       `主题：${input.topic}`,
+      input.angle ? `本次聚焦角度：${input.angle}` : "",
       `篇幅：${input.length}，目标词数区间 ${minWords}-${maxWords}。`,
+      avoidBlock,
       reuseBlock,
+      "务必围绕本次聚焦角度展开，不要偷换成其他常见题材。",
     ]
       .filter(Boolean)
       .join("\n\n"),
@@ -403,6 +430,7 @@ export async function generateReadingArticle(input: {
     title: result.title,
     topic: result.topic,
     level: result.level,
+    angle: input.angle ?? null,
     contentPreview: truncateText(result.content, 320),
     summaryPreview: truncateText(result.summary_cn, 120),
   });

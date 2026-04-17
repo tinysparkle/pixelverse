@@ -52,7 +52,7 @@ export default function SelectionPopover({
   useEffect(() => {
     if (!selection) return;
 
-    function handlePointerDown(event: MouseEvent) {
+    function handlePointerDown(event: PointerEvent | MouseEvent | TouchEvent) {
       if (!popoverRef.current?.contains(event.target as Node)) {
         onClose();
       }
@@ -62,10 +62,12 @@ export default function SelectionPopover({
       if (event.key === "Escape") onClose();
     }
 
-    window.addEventListener("mousedown", handlePointerDown);
+    window.addEventListener("pointerdown", handlePointerDown);
+    window.addEventListener("touchstart", handlePointerDown);
     window.addEventListener("keydown", handleKeyDown);
     return () => {
-      window.removeEventListener("mousedown", handlePointerDown);
+      window.removeEventListener("pointerdown", handlePointerDown);
+      window.removeEventListener("touchstart", handlePointerDown);
       window.removeEventListener("keydown", handleKeyDown);
     };
   }, [selection, onClose]);

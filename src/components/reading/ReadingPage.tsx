@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type {
   ReadingAnnotationRecord,
@@ -33,6 +33,49 @@ export default function ReadingPage() {
   const [selection, setSelection] = useState<ReadingSelectionPayload | null>(null);
   const [focusAnnotationId, setFocusAnnotationId] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("选中文本后可以直接加入生词或短语。");
+  const activeItemIdRef = useRef<string | null>(null);
+  const desiredItemIdRef = useRef<string | null>(null);
+  const openRequestSeqRef = useRef(0);
+  const itemAbortRef = useRef<AbortController | null>(null);
+  const annotationsAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    activeItemIdRef.current = activeItem?.id ?? null;
+  }, [activeItem?.id]);
+
+  useEffect(() => {
+    return () => {
+      itemAbortRef.current?.abort();
+      annotationsAbortRef.current?.abort();
+    };
+  }, []);
+
+  const replaceReadingParams = useCallback((updates: { item?: string | null; anchor?: string | null }) => {
+    const nextParams = new URLSearchParams(window.location.search);
+
+    if (updates.item !== undefined) {
+      if (updates.item) {
+        nextParams.set("item", updates.item);
+      } else {
+        nextParams.delete("item");
+      }
+    }
+
+    if (updates.anchor !== undefined) {
+      if (updates.anchor) {
+        nextParams.set("anchor", updates.anchor);
+      } else {
+        nextParams.delete("anchor");
+      }
+    }
+
+    const nextQuery = nextParams.toString();
+    const nextUrl = nextQuery ? `/reading?${nextQuery}` : "/reading";
+    const currentUrl = `${window.location.pathname}${window.location.search}`;
+    if (nextUrl !== currentUrl) {
+      router.replace(nextUrl, { scroll: false });
+    }
+  }, [router]);
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -46,28 +89,66 @@ export default function ReadingPage() {
     }
   }, []);
 
-  const loadAnnotations = useCallback(async (itemId: string) => {
-    const res = await fetch(`/api/reading/${itemId}/annotations`);
+  const loadAnnotations = useCallback(async (itemId: string, signal?: AbortSignal) => {
+    const res = await fetch(`/api/reading/${itemId}/annotations`, { signal });
     if (!res.ok) return [];
     const data: ReadingAnnotationRecord[] = await res.json();
     setAnnotations(data);
     return data;
   }, []);
 
-  const openItem = useCallback(async (itemId: string) => {
-    const itemRes = await fetch(`/api/reading/${itemId}`);
-    if (!itemRes.ok) return;
+  const openItem = useCallback(async (itemId: string, syncUrl = true) => {
+    desiredItemIdRef.current = itemId;
 
-    const item: ReadingItemRecord = await itemRes.json();
-    setActiveItem(item);
-    setSelection(null);
-    await loadAnnotations(itemId);
+    if (syncUrl) {
+      replaceReadingParams({ item: itemId, anchor: null });
+    }
 
-    const nextParams = new URLSearchParams(searchParams.toString());
-    nextParams.set("item", itemId);
-    nextParams.delete("anchor");
-    router.replace(`/reading?${nextParams.toString()}`, { scroll: false });
-  }, [loadAnnotations, router, searchParams]);
+    if (activeItemIdRef.current === itemId) {
+      return;
+    }
+
+    const requestSeq = openRequestSeqRef.current + 1;
+    openRequestSeqRef.current = requestSeq;
+    itemAbortRef.current?.abort();
+    annotationsAbortRef.current?.abort();
+    const itemController = new AbortController();
+    const annotationsController = new AbortController();
+    itemAbortRef.current = itemController;
+    annotationsAbortRef.current = annotationsController;
+
+    try {
+      const itemRes = await fetch(`/api/reading/${itemId}`, { signal: itemController.signal });
+      if (!itemRes.ok) return;
+
+      const item: ReadingItemRecord = await itemRes.json();
+      if (openRequestSeqRef.current !== requestSeq || desiredItemIdRef.current !== itemId) {
+        return;
+      }
+
+      activeItemIdRef.current = item.id;
+      setActiveItem(item);
+      setSelection(null);
+      await loadAnnotations(itemId, annotationsController.signal);
+      if (openRequestSeqRef.current !== requestSeq || desiredItemIdRef.current !== itemId) {
+        return;
+      }
+      if (syncUrl) {
+        replaceReadingParams({ item: itemId, anchor: null });
+      }
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        throw error;
+      }
+    } finally {
+      if (itemAbortRef.current === itemController) {
+        itemAbortRef.current = null;
+      }
+      if (annotationsAbortRef.current === annotationsController) {
+        annotationsAbortRef.current = null;
+      }
+    }
+  }, [loadAnnotations, replaceReadingParams]);
 
   useEffect(() => {
     fetchItems();
@@ -76,28 +157,28 @@ export default function ReadingPage() {
   useEffect(() => {
     if (!items.length) return;
 
-    if (requestedItemId && requestedItemId !== activeItem?.id) {
-      openItem(requestedItemId);
+    if (requestedItemId) {
+      if (requestedItemId !== desiredItemIdRef.current) {
+        void openItem(requestedItemId, false);
+      }
       return;
     }
 
-    if (!activeItem?.id) {
-      openItem(items[0].id);
+    const fallbackItemId = items[0]?.id;
+    if (fallbackItemId && fallbackItemId !== desiredItemIdRef.current) {
+      void openItem(fallbackItemId, true);
     }
-  }, [items, requestedItemId, activeItem?.id, openItem]);
+  }, [items, requestedItemId, openItem]);
 
   const jumpToAnnotation = useCallback((annotationId: string) => {
     setFocusAnnotationId(annotationId);
     const target = document.querySelector<HTMLElement>(`[data-annotation-id="${annotationId}"]`);
     target?.scrollIntoView({ behavior: "smooth", block: "center" });
 
-    const nextParams = new URLSearchParams(searchParams.toString());
-    if (activeItem?.id) nextParams.set("item", activeItem.id);
-    nextParams.set("anchor", annotationId);
-    router.replace(`/reading?${nextParams.toString()}`, { scroll: false });
+    replaceReadingParams({ item: activeItem?.id ?? null, anchor: annotationId });
 
     window.setTimeout(() => setFocusAnnotationId((value) => (value === annotationId ? null : value)), 1400);
-  }, [activeItem?.id, router, searchParams]);
+  }, [activeItem?.id, replaceReadingParams]);
 
   useEffect(() => {
     if (!requestedAnchorId || !annotations.length) return;
@@ -113,16 +194,10 @@ export default function ReadingPage() {
     try {
       const res = await fetch("/api/reading/recommend", {
         method: "POST",
+        keepalive: true,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          topic:
-            selectedTopic === "news"
-              ? "新闻时事"
-              : selectedTopic === "science"
-                ? "科普阅读"
-                : selectedTopic === "story"
-                  ? "短篇故事"
-                  : "考试风格",
+          topicPreset: selectedTopic,
           level: "cet4",
           lengthBucket,
         }),
@@ -137,7 +212,7 @@ export default function ReadingPage() {
       setStatusMessage(`已生成《${data.generated.title}》，开始阅读吧。`);
       await fetchItems();
       if (data.item?.id) {
-        await openItem(data.item.id);
+        await openItem(data.item.id, true);
       }
     } finally {
       setBusy(false);

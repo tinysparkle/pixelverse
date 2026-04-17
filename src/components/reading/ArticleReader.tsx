@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import type { ReadingAnnotationRecord, ReadingItemRecord } from "@/lib/db/types";
 import type { ReadingSelectionPayload } from "./SelectionPopover";
 import styles from "./reading.module.css";
@@ -44,6 +44,7 @@ export default function ArticleReader({
   onSelectionChange: (payload: ReadingSelectionPayload | null) => void;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const selectionTimerRef = useRef<number | null>(null);
 
   const paragraphs = useMemo(() => {
     if (!item) return [];
@@ -116,6 +117,31 @@ export default function ArticleReader({
     });
   }
 
+  function scheduleSelectionUpdate(delay = 0) {
+    if (selectionTimerRef.current !== null) {
+      window.clearTimeout(selectionTimerRef.current);
+    }
+
+    selectionTimerRef.current = window.setTimeout(() => {
+      selectionTimerRef.current = null;
+      handleSelection();
+    }, delay);
+  }
+
+  useEffect(() => {
+    function handleDocumentSelectionChange() {
+      scheduleSelectionUpdate(20);
+    }
+
+    document.addEventListener("selectionchange", handleDocumentSelectionChange);
+    return () => {
+      document.removeEventListener("selectionchange", handleDocumentSelectionChange);
+      if (selectionTimerRef.current !== null) {
+        window.clearTimeout(selectionTimerRef.current);
+      }
+    };
+  });
+
   if (!item) {
     return (
       <section className={styles.readerPanel}>
@@ -139,7 +165,10 @@ export default function ArticleReader({
           ref={rootRef}
           className={styles.articleBody}
           onMouseUp={handleSelection}
+          onPointerUp={() => scheduleSelectionUpdate(0)}
+          onTouchEnd={() => scheduleSelectionUpdate(60)}
           onKeyUp={handleSelection}
+          onContextMenu={(event) => event.preventDefault()}
         >
           {paragraphs.map((paragraph) => {
             const relevant = annotations
