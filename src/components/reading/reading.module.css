@@ -195,22 +195,17 @@
 }
 
 .mark {
+  position: relative;
   padding: 0 0.06em;
   border-radius: 0.35em;
   color: inherit;
 }
 
-.annotatedText {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  padding-top: 0.78em;
-}
-
 .glossText {
   position: absolute;
-  top: 0.04em;
-  left: 0;
+  left: 50%;
+  top: 0;
+  transform: translate(-50%, -100%);
   white-space: nowrap;
   color: var(--accent);
   font-size: 0.62em;

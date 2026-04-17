@@ -153,15 +153,18 @@ export default function ArticleReader({
 
               const markText = paragraph.text.slice(relativeStart, relativeEnd);
               nodes.push(
-                <mark
+                <span
                   key={annotation.id}
                   className={`${getMarkClass(annotation.kind)} ${focusAnnotationId === annotation.id ? styles.focusMark : ""}`}
                   data-offset={annotation.anchorStart}
                   data-annotation-id={annotation.id}
                   data-gloss={annotation.vocabGlossCn ?? undefined}
                 >
+                  {annotation.vocabGlossCn ? (
+                    <span className={styles.glossText}>{annotation.vocabGlossCn}</span>
+                  ) : null}
                   {markText}
-                </mark>
+                </span>
               );
               cursor = relativeEnd;
             });
