@@ -32,11 +32,13 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files
 .env*
+!.env.example
 
 # uploads (本地测试数据)
 /public/uploads/
+/logs/
 
 # vercel
 .vercel

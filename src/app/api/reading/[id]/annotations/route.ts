@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { after } from "next/server";
 import { auth } from "@/lib/auth";
-import { generateContextualGlossFast } from "@/lib/ai/reading";
+import { generateContextualGloss, generateContextualGlossFast } from "@/lib/ai/reading";
 import {
   createReadingAnnotationForUser,
   createReviewCardForVocabEntry,
@@ -36,6 +36,16 @@ function findSentenceBounds(text: string, start: number, end: number) {
   return {
     start: sentenceStart,
     end: sentenceEnd,
+  };
+}
+
+function findParagraphBounds(text: string, start: number, end: number) {
+  const before = text.lastIndexOf("\n\n", start);
+  const after = text.indexOf("\n\n", end);
+
+  return {
+    start: before >= 0 ? before + 2 : 0,
+    end: after >= 0 ? after : text.length,
   };
 }
 
@@ -78,6 +88,8 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const sentenceBounds = findSentenceBounds(item.contentText, anchorStart, anchorEnd);
   const sentence = item.contentText.slice(sentenceBounds.start, sentenceBounds.end).trim();
+  const paragraphBounds = findParagraphBounds(item.contentText, anchorStart, anchorEnd);
+  const paragraph = item.contentText.slice(paragraphBounds.start, paragraphBounds.end).trim();
 
   let vocabEntryId: string | null = null;
 
@@ -100,11 +112,21 @@ export async function POST(req: NextRequest, { params }: Params) {
       const glossVocabId = vocabEntryId;
       after(async () => {
         try {
-          const gloss = await generateContextualGlossFast({
+          let gloss = await generateContextualGlossFast({
             kind,
             selectedText,
             sentence,
           });
+          if (!gloss) {
+            const detailed = await generateContextualGloss({
+              articleTitle: item.title,
+              kind,
+              selectedText,
+              sentence,
+              paragraph: paragraph || sentence,
+            });
+            gloss = detailed.gloss_cn;
+          }
           if (gloss) {
             await updateVocabEntryForUser(glossVocabId, userId, {
               glossCn: gloss,

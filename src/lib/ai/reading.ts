@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { appendAiDebugLog } from "@/lib/ai/debug-log";
 import {
   type ReadingLengthBucket,
   type ReadingLevel,
@@ -62,10 +63,65 @@ type GlossOutput = z.infer<typeof glossSchema>;
 
 type AiFormat = "openai" | "anthropic";
 
+function resolveAiRequestUrl(rawUrl: string) {
+  const url = new URL(rawUrl);
+  const pathname = url.pathname.replace(/\/+$/, "");
+
+  if (
+    pathname.endsWith("/chat/completions") ||
+    pathname.endsWith("/messages")
+  ) {
+    return url.toString();
+  }
+
+  if (
+    pathname.endsWith("/api/paas/v4") ||
+    pathname.endsWith("/api/coding/paas/v4")
+  ) {
+    url.pathname = `${pathname}/chat/completions`;
+    return url.toString();
+  }
+
+  return url.toString();
+}
+
+function isAiDebugEnabled() {
+  return process.env.AI_DEBUG_LOGS === "1";
+}
+
+async function writeAiLog(level: "info" | "error", event: string, payload: Record<string, unknown>) {
+  try {
+    await appendAiDebugLog({
+      timestamp: new Date().toISOString(),
+      level,
+      event,
+      source: "ai",
+      payload,
+    });
+  } catch (error) {
+    console.error("[ai] failed to persist debug log", error);
+  }
+}
+
+function logAiDebug(event: string, payload: Record<string, unknown>) {
+  if (!isAiDebugEnabled()) return;
+  void writeAiLog("info", event, payload);
+}
+
+function logAiError(event: string, payload: Record<string, unknown>) {
+  void writeAiLog("error", event, payload);
+}
+
 function truncateText(text: string, maxLength = 220) {
   const normalized = text.replace(/\s+/g, " ").trim();
   if (normalized.length <= maxLength) return normalized;
   return `${normalized.slice(0, maxLength - 1)}…`;
+}
+
+function maskApiKey(apiKey: string | undefined) {
+  if (!apiKey) return "missing";
+  if (apiKey.length <= 8) return "***";
+  return `${apiKey.slice(0, 4)}***${apiKey.slice(-4)}`;
 }
 
 function extractTextFromUnknown(value: unknown): string {
@@ -107,8 +163,6 @@ function extractTextFromResponse(payload: unknown, format: AiFormat) {
         const messageRecord = message as Record<string, unknown>;
         const candidates = [
           messageRecord.content,
-          messageRecord.reasoning_content,
-          messageRecord.reasoning,
           messageRecord.output_text,
           messageRecord.text,
         ];
@@ -164,6 +218,7 @@ async function callAiText(input: {
   system: string;
   prompt: string;
   maxTokens?: number;
+  disableThinking?: boolean;
 }) {
   const url = process.env.AI_API_URL;
   const apiKey = process.env.AI_API_KEY;
@@ -173,7 +228,20 @@ async function callAiText(input: {
     throw new Error("AI_API_URL environment variable is not set");
   }
 
-  const response = await fetch(url, {
+  const requestUrl = resolveAiRequestUrl(url);
+
+  logAiDebug("request:start", {
+    url: requestUrl,
+    format,
+    model: process.env.AI_MODEL ?? null,
+    maxTokens: input.maxTokens ?? 4000,
+    disableThinking: input.disableThinking ?? false,
+    apiKey: maskApiKey(apiKey),
+    systemPreview: truncateText(input.system, 120),
+    promptPreview: truncateText(input.prompt, 240),
+  });
+
+  const response = await fetch(requestUrl, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey ?? ""}`,
@@ -186,13 +254,24 @@ async function callAiText(input: {
         { role: "user", content: input.prompt },
       ],
       max_tokens: input.maxTokens ?? 4000,
+      ...(input.disableThinking ? { thinking: { type: "disabled" } } : {}),
     }),
     cache: "no-store",
   });
 
   const rawText = await response.text();
 
+  logAiDebug("request:response", {
+    status: response.status,
+    ok: response.ok,
+    bodyPreview: truncateText(rawText, 400),
+  });
+
   if (!response.ok) {
+    logAiError("request:failed", {
+      status: response.status,
+      bodyPreview: truncateText(rawText, 400),
+    });
     throw new Error(`AI 接口请求失败（${response.status}）：${truncateText(rawText)}`);
   }
 
@@ -200,6 +279,9 @@ async function callAiText(input: {
   try {
     payload = JSON.parse(rawText);
   } catch {
+    logAiDebug("response:text", {
+      extractedPreview: truncateText(rawText, 240),
+    });
     return rawText;
   }
 
@@ -208,8 +290,16 @@ async function callAiText(input: {
     const hint = typeof payload === "object" && payload
       ? ` 可用字段：${truncateText(Object.keys(payload as Record<string, unknown>).join(", "), 120)}`
       : "";
+    logAiError("response:empty", {
+      rawPreview: truncateText(rawText, 400),
+      format,
+    });
     throw new Error(`AI 响应里没有可提取的文本内容，原始片段：${truncateText(rawText)}${hint}`);
   }
+
+  logAiDebug("response:parsed", {
+    extractedPreview: truncateText(text, 320),
+  });
 
   return text;
 }
@@ -242,6 +332,7 @@ async function createCompatibilityJson<T>(input: {
   schema: z.ZodType<T>;
   example: string;
   maxTokens?: number;
+  disableThinking?: boolean;
 }) {
   const text = await callAiText({
     system: input.system,
@@ -252,6 +343,7 @@ async function createCompatibilityJson<T>(input: {
       input.example,
     ].join("\n\n"),
     maxTokens: input.maxTokens,
+    disableThinking: input.disableThinking,
   });
 
   try {
@@ -292,7 +384,7 @@ export async function generateReadingArticle(input: {
         ].join("\n")
       : "";
 
-  return createCompatibilityJson({
+  const result = await createCompatibilityJson({
     system: ARTICLE_SYSTEM_PROMPT,
     schema: articleSchema,
     example,
@@ -306,15 +398,29 @@ export async function generateReadingArticle(input: {
       .filter(Boolean)
       .join("\n\n"),
   }) satisfies Promise<ArticleOutput>;
+
+  logAiDebug("article:result", {
+    title: result.title,
+    topic: result.topic,
+    level: result.level,
+    contentPreview: truncateText(result.content, 320),
+    summaryPreview: truncateText(result.summary_cn, 120),
+  });
+
+  return result;
 }
 
 function cleanFastGlossRaw(raw: string): string | null {
-  const token = raw.trim().split(/[\s\n]+/)[0] ?? "";
-  const stripped = token
-    .replace(/^[`"'「『（(【\[]+/, "")
-    .replace(/[`"'」』）)】\].。!！?？,，;；:：]+$/, "")
-    .slice(0, 12);
-  return stripped || null;
+  const normalized = raw
+    .replace(/\r/g, "")
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(/[*#>`_-]+/g, " ")
+    .replace(/\b\d+\s*[.)、:：-]?\s*/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const match = normalized.match(/[\u4e00-\u9fff]{2,12}/);
+  return match?.[0] ?? null;
 }
 
 export async function generateContextualGlossFast(input: {
@@ -322,16 +428,35 @@ export async function generateContextualGlossFast(input: {
   selectedText: string;
   sentence: string;
 }) {
-  const raw = await callAiText({
-    system: FAST_GLOSS_SYSTEM,
-    maxTokens: 60,
-    prompt: [
-      `句子：${input.sentence}`,
-      `${input.kind === "phrase" ? "短语" : "词"}：${input.selectedText}`,
-      "输出：",
-    ].join("\n"),
-  });
-  return cleanFastGlossRaw(raw);
+  try {
+    const raw = await callAiText({
+      system: FAST_GLOSS_SYSTEM,
+      maxTokens: 60,
+      disableThinking: true,
+      prompt: [
+        `句子：${input.sentence}`,
+        `${input.kind === "phrase" ? "短语" : "词"}：${input.selectedText}`,
+        "输出：",
+      ].join("\n"),
+    });
+    const gloss = cleanFastGlossRaw(raw);
+    logAiDebug("gloss:fast", {
+      kind: input.kind,
+      selectedText: input.selectedText,
+      sentencePreview: truncateText(input.sentence, 160),
+      rawPreview: truncateText(raw, 120),
+      gloss,
+    });
+    return gloss;
+  } catch (error) {
+    logAiError("gloss:fast-failed", {
+      kind: input.kind,
+      selectedText: input.selectedText,
+      sentencePreview: truncateText(input.sentence, 160),
+      error: error instanceof Error ? error.message : "未知错误",
+    });
+    return null;
+  }
 }
 
 export async function generateContextualGloss(input: {
@@ -345,11 +470,12 @@ export async function generateContextualGloss(input: {
     gloss_cn: "误解的",
   }, null, 2);
 
-  return createCompatibilityJson({
+  const result = await createCompatibilityJson({
     system: GLOSS_SYSTEM_PROMPT,
     schema: glossSchema,
     example,
     maxTokens: 300,
+    disableThinking: true,
     prompt: [
       `文章标题：${input.articleTitle}`,
       `词条类型：${input.kind}`,
@@ -358,4 +484,12 @@ export async function generateContextualGloss(input: {
       `所在段落：${input.paragraph}`,
     ].join("\n\n"),
   }) satisfies Promise<GlossOutput>;
+
+  logAiDebug("gloss:result", {
+    kind: input.kind,
+    selectedText: input.selectedText,
+    gloss: result.gloss_cn,
+  });
+
+  return result;
 }
