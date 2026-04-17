@@ -11,8 +11,6 @@ import type {
 	ReadingItemSummary,
 	ReadingLengthBucket,
 	ReadingLevel,
-	ReadingPracticeRecord,
-	ReadingPracticeType,
 	ReadingReviewCardRecord,
 	ReadingSourceType,
 	ReadingStatus,
@@ -140,19 +138,6 @@ type ReadingAnnotationRow = RowDataPacket & {
 	vocab_kind: VocabEntryKind | null;
 	vocab_note_text: string | null;
 	vocab_mastery_state: VocabMasteryState | null;
-};
-
-type ReadingPracticeRow = RowDataPacket & {
-	id: string;
-	reading_item_id: string;
-	user_id: string;
-	practice_type: ReadingPracticeType;
-	question_json: string;
-	result_json: string | null;
-	score: number | null;
-	created_at: Date | string;
-	updated_at: Date | string;
-	deleted_at: Date | string | null;
 };
 
 type ReadingReviewCardRow = RowDataPacket & {
@@ -358,21 +343,6 @@ function mapReadingAnnotation(row: ReadingAnnotationRow): ReadingAnnotationRecor
 		vocabKind: row.vocab_kind,
 		vocabNoteText: row.vocab_note_text,
 		vocabMasteryState: row.vocab_mastery_state,
-	};
-}
-
-function mapReadingPractice(row: ReadingPracticeRow): ReadingPracticeRecord {
-	return {
-		id: row.id,
-		readingItemId: row.reading_item_id,
-		userId: row.user_id,
-		practiceType: row.practice_type,
-		questionJson: row.question_json,
-		resultJson: row.result_json,
-		score: row.score,
-		createdAt: toIsoString(row.created_at) ?? new Date().toISOString(),
-		updatedAt: toIsoString(row.updated_at) ?? new Date().toISOString(),
-		deletedAt: toIsoString(row.deleted_at),
 	};
 }
 
@@ -1371,95 +1341,19 @@ export async function updateReadingAnnotationForUser(
 	return getReadingAnnotationByIdForUser(annotationId, userId);
 }
 
-export async function createReadingPracticeForUser(
-	userId: string,
-	data: {
-		readingItemId: string;
-		practiceType: ReadingPracticeType;
-		questionJson: string;
-		resultJson?: string | null;
-		score?: number | null;
-	}
+export async function softDeleteReadingAnnotationForUser(
+	annotationId: string,
+	readingItemId: string,
+	userId: string
 ) {
-	const practiceId = randomUUID();
-
-	await executeStatement(
-		`INSERT INTO reading_practices (
-			id, reading_item_id, user_id, practice_type, question_json, result_json, score
-		 ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		[
-			practiceId,
-			data.readingItemId,
-			userId,
-			data.practiceType,
-			data.questionJson,
-			data.resultJson ?? null,
-			data.score ?? null,
-		]
-	);
-
-	return getReadingPracticeByIdForUser(practiceId, userId);
-}
-
-export async function getReadingPracticeByIdForUser(practiceId: string, userId: string) {
-	const rows = await queryRows<ReadingPracticeRow[]>(
-		`SELECT id, reading_item_id, user_id, practice_type, question_json, result_json,
-		        score, created_at, updated_at, deleted_at
-		 FROM reading_practices
-		 WHERE id = ? AND user_id = ? AND deleted_at IS NULL
-		 LIMIT 1`,
-		[practiceId, userId]
-	);
-
-	return rows[0] ? mapReadingPractice(rows[0]) : null;
-}
-
-export async function getLatestReadingPracticeForItem(readingItemId: string, userId: string) {
-	const rows = await queryRows<ReadingPracticeRow[]>(
-		`SELECT id, reading_item_id, user_id, practice_type, question_json, result_json,
-		        score, created_at, updated_at, deleted_at
-		 FROM reading_practices
-		 WHERE reading_item_id = ? AND user_id = ? AND deleted_at IS NULL
-		 ORDER BY created_at DESC
-		 LIMIT 1`,
-		[readingItemId, userId]
-	);
-
-	return rows[0] ? mapReadingPractice(rows[0]) : null;
-}
-
-export async function updateReadingPracticeResultForUser(
-	practiceId: string,
-	userId: string,
-	updates: {
-		resultJson?: string | null;
-		score?: number | null;
-	}
-) {
-	const fields: string[] = ["updated_at = UTC_TIMESTAMP()"];
-	const values: SqlValue[] = [];
-
-	if (updates.resultJson !== undefined) {
-		fields.push("result_json = ?");
-		values.push(updates.resultJson);
-	}
-	if (updates.score !== undefined) {
-		fields.push("score = ?");
-		values.push(updates.score);
-	}
-
-	values.push(practiceId, userId);
-
 	const result = await executeStatement(
-		`UPDATE reading_practices
-		 SET ${fields.join(", ")}
-		 WHERE id = ? AND user_id = ? AND deleted_at IS NULL`,
-		values
+		`UPDATE reading_annotations
+		 SET deleted_at = UTC_TIMESTAMP()
+		 WHERE id = ? AND reading_item_id = ? AND user_id = ? AND deleted_at IS NULL`,
+		[annotationId, readingItemId, userId]
 	);
 
-	if (result.affectedRows === 0) return null;
-
-	return getReadingPracticeByIdForUser(practiceId, userId);
+	return result.affectedRows > 0;
 }
 
 async function attachLatestContextsToReviewCards(cards: ReadingReviewCardRecord[]) {

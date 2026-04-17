@@ -4,7 +4,6 @@ export type ReadingLengthBucket = "short" | "medium" | "long";
 export type ReadingLevel = "cet4" | "b1" | "b2";
 export type VocabEntryKind = "word" | "phrase";
 export type ReadingAnnotationKind = VocabEntryKind;
-export type ReadingPracticeType = "vocab" | "grammar" | "mixed";
 export type ReviewState = "new" | "learning" | "review" | "relearning";
 export type ReviewGrade = "again" | "hard" | "good" | "easy";
 

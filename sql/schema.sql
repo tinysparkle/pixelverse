@@ -127,29 +127,6 @@ CREATE TABLE IF NOT EXISTS reading_annotations (
     ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
-CREATE TABLE IF NOT EXISTS reading_practices (
-  id CHAR(36) NOT NULL,
-  reading_item_id CHAR(36) NOT NULL,
-  user_id CHAR(36) NOT NULL,
-  practice_type ENUM('vocab', 'grammar', 'mixed') NOT NULL DEFAULT 'mixed',
-  question_json LONGTEXT NOT NULL,
-  result_json LONGTEXT NULL,
-  score INT NULL,
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  deleted_at DATETIME NULL,
-  PRIMARY KEY (id),
-  KEY idx_reading_practices_item_deleted (reading_item_id, deleted_at, created_at),
-  CONSTRAINT fk_reading_practices_item
-    FOREIGN KEY (reading_item_id)
-    REFERENCES reading_items (id)
-    ON DELETE CASCADE,
-  CONSTRAINT fk_reading_practices_user
-    FOREIGN KEY (user_id)
-    REFERENCES users (id)
-    ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
 CREATE TABLE IF NOT EXISTS reading_review_cards (
   id CHAR(36) NOT NULL,
   user_id CHAR(36) NOT NULL,

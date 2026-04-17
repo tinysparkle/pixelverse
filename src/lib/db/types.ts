@@ -65,7 +65,6 @@ export type ReadingStatus = "new" | "reading" | "reviewed" | "trained";
 export type VocabEntryKind = "word" | "phrase";
 export type VocabMasteryState = "new" | "learning" | "known";
 export type ReadingAnnotationKind = VocabEntryKind;
-export type ReadingPracticeType = "vocab" | "grammar" | "mixed";
 export type ReviewState = "new" | "learning" | "review" | "relearning";
 export type ReviewGrade = "again" | "hard" | "good" | "easy";
 
@@ -153,19 +152,6 @@ export interface ReadingAnnotationRecord {
 	vocabKind: VocabEntryKind | null;
 	vocabNoteText: string | null;
 	vocabMasteryState: VocabMasteryState | null;
-}
-
-export interface ReadingPracticeRecord {
-	id: string;
-	readingItemId: string;
-	userId: string;
-	practiceType: ReadingPracticeType;
-	questionJson: string;
-	resultJson: string | null;
-	score: number | null;
-	createdAt: string;
-	updatedAt: string;
-	deletedAt: string | null;
 }
 
 export interface ReadingReviewCardRecord {

@@ -92,11 +92,27 @@ export default function ArticleReader({
       return;
     }
 
+    const exactMatch = annotations.find(
+      (annotation) => annotation.anchorStart === anchorStart && annotation.anchorEnd === anchorEnd
+    );
+    if (exactMatch) {
+      onSelectionChange({
+        text,
+        anchorStart,
+        anchorEnd,
+        rect,
+        mode: "remove",
+        annotationId: exactMatch.id,
+      });
+      return;
+    }
+
     onSelectionChange({
       text,
       anchorStart,
       anchorEnd,
       rect,
+      mode: "add",
     });
   }
 

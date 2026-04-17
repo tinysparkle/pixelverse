@@ -4,25 +4,35 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import styles from "./reading.module.css";
 
-export interface ReadingSelectionPayload {
-  text: string;
-  anchorStart: number;
-  anchorEnd: number;
-  rect: DOMRect;
-}
+export type ReadingSelectionPayload =
+  | {
+      text: string;
+      anchorStart: number;
+      anchorEnd: number;
+      rect: DOMRect;
+      mode?: "add";
+    }
+  | {
+      text: string;
+      anchorStart: number;
+      anchorEnd: number;
+      rect: DOMRect;
+      mode: "remove";
+      annotationId: string;
+    };
 
 export default function SelectionPopover({
   selection,
   onClose,
   onPick,
+  onRemoveAnnotation,
 }: {
   selection: ReadingSelectionPayload | null;
   onClose: () => void;
-  onPick: (kind: "word" | "phrase", noteText?: string | null) => void;
+  onPick: (kind: "word" | "phrase") => void;
+  onRemoveAnnotation?: () => void;
 }) {
   const popoverRef = useRef<HTMLDivElement | null>(null);
-  const [showNote, setShowNote] = useState(false);
-  const [noteText, setNoteText] = useState("");
   const [position, setPosition] = useState({ left: 12, top: 12 });
 
   useLayoutEffect(() => {
@@ -37,7 +47,7 @@ export default function SelectionPopover({
     let left = selection.rect.left + selection.rect.width / 2 - bounds.width / 2;
     left = Math.max(12, Math.min(left, window.innerWidth - bounds.width - 12));
     setPosition({ left, top });
-  }, [selection, showNote]);
+  }, [selection]);
 
   useEffect(() => {
     if (!selection) return;
@@ -62,6 +72,8 @@ export default function SelectionPopover({
 
   if (typeof document === "undefined" || !selection) return null;
 
+  const isRemove = selection.mode === "remove";
+
   return createPortal(
     <div
       ref={popoverRef}
@@ -70,26 +82,27 @@ export default function SelectionPopover({
     >
       <div className={styles.popoverText}>{selection.text}</div>
       <div className={styles.popoverActions}>
-        <button type="button" className={styles.secondaryBtn} onClick={() => onPick("word", noteText || null)}>
-          加入生词
-        </button>
-        <button type="button" className={styles.secondaryBtn} onClick={() => onPick("phrase", noteText || null)}>
-          加入短语
-        </button>
-        <button type="button" className={styles.ghostBtn} onClick={() => setShowNote((value) => !value)}>
-          写备注
-        </button>
+        {isRemove ? (
+          <button
+            type="button"
+            className={styles.secondaryBtn}
+            onClick={() => {
+              onRemoveAnnotation?.();
+            }}
+          >
+            移除标注
+          </button>
+        ) : (
+          <>
+            <button type="button" className={styles.secondaryBtn} onClick={() => onPick("word")}>
+              加入生词
+            </button>
+            <button type="button" className={styles.secondaryBtn} onClick={() => onPick("phrase")}>
+              加入短语
+            </button>
+          </>
+        )}
       </div>
-      {showNote ? (
-        <div className={styles.section}>
-          <textarea
-            className={styles.textarea}
-            value={noteText}
-            onChange={(event) => setNoteText(event.target.value)}
-            placeholder="给这个词条写一点自己的记忆提示"
-          />
-        </div>
-      ) : null}
     </div>,
     document.body
   );

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import { auth } from "@/lib/auth";
-import { generateContextualGloss } from "@/lib/ai/reading";
+import { generateContextualGlossFast } from "@/lib/ai/reading";
 import {
   createReadingAnnotationForUser,
   createReviewCardForVocabEntry,
@@ -35,15 +36,6 @@ function findSentenceBounds(text: string, start: number, end: number) {
   return {
     start: sentenceStart,
     end: sentenceEnd,
-  };
-}
-
-function findParagraphBounds(text: string, start: number, end: number) {
-  const before = text.lastIndexOf("\n\n", start);
-  const after = text.indexOf("\n\n", end);
-  return {
-    start: before >= 0 ? before + 2 : 0,
-    end: after >= 0 ? after : text.length,
   };
 }
 
@@ -84,14 +76,16 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "标注位置无效" }, { status: 400 });
   }
 
-  const noteText = typeof body.noteText === "string" ? body.noteText.trim() || null : null;
+  const sentenceBounds = findSentenceBounds(item.contentText, anchorStart, anchorEnd);
+  const sentence = item.contentText.slice(sentenceBounds.start, sentenceBounds.end).trim();
+
   let vocabEntryId: string | null = null;
 
   if (kind === "word" || kind === "phrase") {
     const vocabResult = await upsertVocabEntryForUser(session.user.id, {
       kind,
       text: selectedText,
-      noteText,
+      noteText: null,
     });
 
     if (!vocabResult.entry) {
@@ -101,24 +95,25 @@ export async function POST(req: NextRequest, { params }: Params) {
     vocabEntryId = vocabResult.entry.id;
     await createReviewCardForVocabEntry(session.user.id, vocabEntryId);
 
-    if (!vocabResult.entry.glossCn) {
-      try {
-        const sentenceBounds = findSentenceBounds(item.contentText, anchorStart, anchorEnd);
-        const paragraphBounds = findParagraphBounds(item.contentText, anchorStart, anchorEnd);
-        const gloss = await generateContextualGloss({
-          articleTitle: item.title,
-          kind,
-          selectedText,
-          sentence: item.contentText.slice(sentenceBounds.start, sentenceBounds.end).trim(),
-          paragraph: item.contentText.slice(paragraphBounds.start, paragraphBounds.end).trim(),
-        });
-
-        await updateVocabEntryForUser(vocabEntryId, session.user.id, {
-          glossCn: gloss.gloss_cn,
-        });
-      } catch {
-        // Ignore gloss generation failures; vocab creation should still succeed.
-      }
+    if (!vocabResult.entry.glossCn && sentence && vocabEntryId) {
+      const userId = session.user.id;
+      const glossVocabId = vocabEntryId;
+      after(async () => {
+        try {
+          const gloss = await generateContextualGlossFast({
+            kind,
+            selectedText,
+            sentence,
+          });
+          if (gloss) {
+            await updateVocabEntryForUser(glossVocabId, userId, {
+              glossCn: gloss,
+            });
+          }
+        } catch {
+          // Ignore gloss generation failures; vocab creation already succeeded.
+        }
+      });
     }
   }
 
