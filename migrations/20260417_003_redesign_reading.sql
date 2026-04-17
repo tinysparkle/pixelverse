@@ -2,6 +2,31 @@ DROP TABLE IF EXISTS reading_review_cards;
 DROP TABLE IF EXISTS reading_annotations;
 DROP TABLE IF EXISTS vocab_entries;
 
+CREATE TABLE IF NOT EXISTS reading_items (
+  id CHAR(36) NOT NULL,
+  user_id CHAR(36) NOT NULL,
+  title VARCHAR(255) NOT NULL,
+  source_type ENUM('ai') NOT NULL DEFAULT 'ai',
+  topic VARCHAR(100) NOT NULL,
+  level ENUM('cet4', 'b1', 'b2') NOT NULL DEFAULT 'cet4',
+  length_bucket ENUM('short', 'medium', 'long') NOT NULL DEFAULT 'medium',
+  status ENUM('new', 'reading', 'reviewed', 'trained') NOT NULL DEFAULT 'new',
+  generation_prompt_json LONGTEXT NULL,
+  content_text LONGTEXT NOT NULL,
+  content_json LONGTEXT NULL,
+  word_count INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at DATETIME NULL,
+  PRIMARY KEY (id),
+  KEY idx_reading_items_user_deleted_updated (user_id, deleted_at, updated_at),
+  KEY idx_reading_items_user_status (user_id, status, deleted_at),
+  CONSTRAINT fk_reading_items_user
+    FOREIGN KEY (user_id)
+    REFERENCES users (id)
+    ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 CREATE TABLE IF NOT EXISTS vocab_entries (
   id CHAR(36) NOT NULL,
   user_id CHAR(36) NOT NULL,
