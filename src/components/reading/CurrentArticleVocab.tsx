@@ -43,6 +43,10 @@ export default function CurrentArticleVocab({
               className={styles.vocabItem}
               onClick={() => onJump(entry.annotationId)}
             >
+              <span className={styles.vocabItemBody}>
+                <span className={styles.vocabWord}>{entry.text}</span>
+                {entry.glossCn ? <span className={styles.vocabGloss}>{entry.glossCn}</span> : null}
+              </span>
               <span className={styles.vocabItemBadges} aria-hidden>
                 <span className={`${styles.badge} ${styles.badgeCompact} ${entry.kind === "word" ? styles.badgeWord : styles.badgePhrase}`}>
                   {entry.kind === "word" ? "生词" : "短语"}
@@ -50,10 +54,6 @@ export default function CurrentArticleVocab({
                 {entry.masteryState ? (
                   <span className={`${styles.badge} ${styles.badgeCompact}`}>{entry.masteryState}</span>
                 ) : null}
-              </span>
-              <span className={styles.vocabItemBody}>
-                <span className={styles.vocabWord}>{entry.text}</span>
-                {entry.glossCn ? <span className={styles.vocabGloss}>{entry.glossCn}</span> : null}
               </span>
             </button>
           ))}
