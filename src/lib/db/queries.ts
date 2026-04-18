@@ -12,6 +12,7 @@ import type {
 	ReadingLengthBucket,
 	ReadingLevel,
 	ReadingReviewCardRecord,
+	ReadingStudyCard,
 	ReadingSourceType,
 	ReadingStatus,
 	ReviewForecast,
@@ -21,7 +22,6 @@ import type {
 	TaskRecord,
 	TaskSummary,
 	UserRecord,
-	VocabContext,
 	VocabEntryKind,
 	VocabEntryRecord,
 	VocabMasteryState,
@@ -109,17 +109,6 @@ type VocabSummaryRow = RowDataPacket & {
 	occurrence_count: number;
 	last_annotated_at: Date | string | null;
 	updated_at: Date | string;
-};
-
-type VocabContextRow = RowDataPacket & {
-	annotation_id: string;
-	reading_item_id: string;
-	reading_item_title: string;
-	selected_text: string;
-	anchor_start: number;
-	anchor_end: number;
-	content_text: string;
-	created_at: Date | string;
 };
 
 type ReadingAnnotationRow = RowDataPacket & {
@@ -310,19 +299,6 @@ function mapVocabSummary(row: VocabSummaryRow): VocabSummary {
 		occurrenceCount: row.occurrence_count,
 		lastAnnotatedAt: toIsoString(row.last_annotated_at),
 		updatedAt: toIsoString(row.updated_at) ?? new Date().toISOString(),
-	};
-}
-
-function mapVocabContext(row: VocabContextRow): VocabContext {
-	return {
-		annotationId: row.annotation_id,
-		readingItemId: row.reading_item_id,
-		readingItemTitle: row.reading_item_title,
-		selectedText: row.selected_text,
-		anchorStart: row.anchor_start,
-		anchorEnd: row.anchor_end,
-		snippet: createContextSnippet(row.content_text, row.anchor_start, row.anchor_end),
-		createdAt: toIsoString(row.created_at) ?? new Date().toISOString(),
 	};
 }
 
@@ -1102,50 +1078,6 @@ export async function listVocabEntriesForUser(
 	return rows.map(mapVocabSummary);
 }
 
-export async function getVocabEntryWithContextsForUser(vocabEntryId: string, userId: string) {
-	const entry = await getVocabEntryByIdForUser(vocabEntryId, userId);
-	if (!entry) return null;
-
-	const contextRows = await queryRows<VocabContextRow[]>(
-		`SELECT ra.id AS annotation_id,
-		        ra.reading_item_id,
-		        ri.title AS reading_item_title,
-		        ra.selected_text,
-		        ra.anchor_start,
-		        ra.anchor_end,
-		        ri.content_text,
-		        ra.created_at
-		 FROM reading_annotations ra
-		 INNER JOIN reading_items ri
-		   ON ri.id = ra.reading_item_id
-		  AND ri.deleted_at IS NULL
-		 WHERE ra.vocab_entry_id = ? AND ra.user_id = ? AND ra.deleted_at IS NULL
-		 ORDER BY ra.created_at DESC`,
-		[vocabEntryId, userId]
-	);
-
-	const contexts = contextRows.map(mapVocabContext);
-	const articleCount = new Set(contexts.map((context) => context.readingItemId)).size;
-	const summary: VocabSummary = {
-		id: entry.id,
-		kind: entry.kind,
-		text: entry.text,
-		glossCn: entry.glossCn,
-		noteText: entry.noteText,
-		masteryState: entry.masteryState,
-		articleCount,
-		occurrenceCount: contexts.length,
-		lastAnnotatedAt: contexts[0]?.createdAt ?? null,
-		updatedAt: entry.updatedAt,
-	};
-
-	return {
-		entry,
-		summary,
-		contexts,
-	};
-}
-
 export async function updateVocabEntryForUser(
 	vocabEntryId: string,
 	userId: string,
@@ -1189,35 +1121,6 @@ export async function updateVocabEntryForUser(
 	if (result.affectedRows === 0) return null;
 
 	return getVocabEntryByIdForUser(vocabEntryId, userId);
-}
-
-export async function softDeleteVocabEntryForUser(vocabEntryId: string, userId: string) {
-	return withTransaction(async (connection) => {
-		const [result] = await connection.execute<ResultSetHeader>(
-			`UPDATE vocab_entries
-			 SET deleted_at = UTC_TIMESTAMP(), updated_at = UTC_TIMESTAMP()
-			 WHERE id = ? AND user_id = ? AND deleted_at IS NULL`,
-			[vocabEntryId, userId]
-		);
-
-		if (result.affectedRows === 0) return false;
-
-		await connection.execute(
-			`UPDATE reading_annotations
-			 SET deleted_at = UTC_TIMESTAMP()
-			 WHERE vocab_entry_id = ? AND user_id = ? AND deleted_at IS NULL`,
-			[vocabEntryId, userId]
-		);
-
-		await connection.execute(
-			`UPDATE reading_review_cards
-			 SET deleted_at = UTC_TIMESTAMP(), updated_at = UTC_TIMESTAMP()
-			 WHERE vocab_entry_id = ? AND user_id = ? AND deleted_at IS NULL`,
-			[vocabEntryId, userId]
-		);
-
-		return true;
-	});
 }
 
 export async function listReadingAnnotationsForItem(readingItemId: string, userId: string) {
@@ -1400,7 +1303,7 @@ async function attachLatestContextsToReviewCards(cards: ReadingReviewCardRecord[
 	});
 }
 
-export async function listDueReviewCardsForUser(userId: string) {
+export async function listReadingStudyCardsForUser(userId: string) {
 	const rows = await queryRows<ReadingReviewCardRow[]>(
 		`SELECT rrc.id, rrc.user_id, rrc.vocab_entry_id, rrc.review_state, rrc.interval_days,
 		        rrc.due_at, rrc.last_reviewed_at, rrc.review_count, rrc.lapse_count,
@@ -1411,12 +1314,22 @@ export async function listDueReviewCardsForUser(userId: string) {
 		 INNER JOIN vocab_entries v
 		   ON v.id = rrc.vocab_entry_id
 		  AND v.deleted_at IS NULL
-		 WHERE rrc.user_id = ? AND rrc.deleted_at IS NULL AND rrc.due_at <= UTC_TIMESTAMP()
-		 ORDER BY due_at ASC, created_at ASC`,
+		 WHERE rrc.user_id = ? AND rrc.deleted_at IS NULL
+		 ORDER BY
+		   CASE WHEN rrc.due_at <= UTC_TIMESTAMP() THEN 0 ELSE 1 END ASC,
+		   rrc.due_at ASC,
+		   rrc.updated_at DESC,
+		   rrc.created_at DESC`,
 		[userId]
 	);
 
-	return attachLatestContextsToReviewCards(rows.map(mapReadingReviewCard));
+	const cards = await attachLatestContextsToReviewCards(rows.map(mapReadingReviewCard));
+	const now = Date.now();
+
+	return cards.map((card): ReadingStudyCard => ({
+		...card,
+		isDue: new Date(card.dueAt).getTime() <= now,
+	}));
 }
 
 export async function getReviewCardByIdForUser(cardId: string, userId: string) {

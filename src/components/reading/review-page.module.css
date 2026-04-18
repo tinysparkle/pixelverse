@@ -1,66 +1,78 @@
-.layout {
-  display: grid;
-  gap: 20px;
+.page {
+  overflow: hidden;
 }
 
-.stats {
+.viewport {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 16px;
+  min-height: calc(100vh - 140px);
+  overflow: hidden;
+}
+
+.topbar {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
 }
 
 .statCard,
-.cardWrap {
-  background: rgba(255, 253, 247, 0.88);
+.card,
+.emptyWrap {
   border: 1px solid var(--line);
   border-radius: 24px;
+  background: rgba(255, 253, 247, 0.88);
   box-shadow: var(--shadow);
 }
 
 .statCard {
-  padding: 18px;
+  display: grid;
+  gap: 6px;
+  padding: 16px 18px;
+  min-width: 0;
 }
 
-.statValue {
-  font-size: clamp(1.6rem, 3vw, 2.3rem);
-  line-height: 1.1;
-}
-
-.muted {
+.statLabel,
+.muted,
+.dueText,
+.contextText {
   color: var(--ink-dim);
   line-height: 1.6;
 }
 
-.cardWrap {
-  padding: 28px;
+.statValue {
+  font-size: clamp(1.5rem, 3vw, 2.2rem);
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.cardShell {
+  min-height: 0;
 }
 
 .card {
-  min-height: 360px;
-  padding: 28px;
-  border-radius: 26px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(239, 232, 215, 0.72)),
-    repeating-linear-gradient(180deg, transparent, transparent 31px, rgba(42, 38, 35, 0.04) 31px, rgba(42, 38, 35, 0.04) 32px);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
-}
-
-.cardFront,
-.cardBack {
   display: grid;
-  gap: 18px;
+  grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+  gap: 16px;
+  height: 100%;
+  min-height: 0;
+  padding: 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(239, 232, 215, 0.78)),
+    repeating-linear-gradient(180deg, transparent, transparent 33px, rgba(42, 38, 35, 0.035) 33px, rgba(42, 38, 35, 0.035) 34px);
 }
 
-.titleRow {
+.cardHeader,
+.wordBlock {
+  display: grid;
+  gap: 10px;
+}
+
+.badgeRow {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
-}
-
-.word {
-  font-size: clamp(2rem, 4vw, 3.3rem);
-  line-height: 1.1;
 }
 
 .badge {
@@ -68,54 +80,238 @@
   align-items: center;
   border-radius: 999px;
   padding: 4px 10px;
-  background: rgba(47, 93, 138, 0.1);
-  color: var(--ink-soft);
   font-size: 0.76rem;
+  color: var(--ink-soft);
+  background: rgba(47, 93, 138, 0.1);
 }
 
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 18px;
+.badgeDue {
+  background: rgba(193, 93, 71, 0.18);
 }
 
-.actionBtn {
+.badgeFuture {
+  background: rgba(92, 138, 97, 0.18);
+}
+
+.word {
+  font-size: clamp(2.4rem, 5vw, 4rem);
+  line-height: 1.04;
+}
+
+.gloss {
+  font-size: clamp(1.08rem, 2vw, 1.28rem);
+  color: var(--ink-soft);
+}
+
+.contextToggle,
+.reviewBtn {
   border: 0;
   border-radius: 14px;
-  padding: 12px 16px;
-  color: var(--ink);
-  background: rgba(47, 93, 138, 0.1);
   font: inherit;
   cursor: pointer;
 }
 
-.again {
+.contextToggle {
+  justify-self: start;
+  padding: 10px 14px;
+  color: var(--ink);
+  background: rgba(47, 93, 138, 0.1);
+}
+
+.contextSection {
+  min-height: 0;
+  max-height: 180px;
+  padding: 14px 16px;
+  border-radius: 18px;
+  background: rgba(239, 232, 215, 0.52);
+  overflow: auto;
+}
+
+.contextLink {
+  display: inline-block;
+  margin-top: 10px;
+}
+
+.reviewActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.reviewBtn {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+  padding: 14px 16px;
+  color: var(--ink);
+  background: rgba(47, 93, 138, 0.1);
+  text-align: left;
+}
+
+.reviewBtnDanger {
   background: rgba(193, 93, 71, 0.18);
 }
 
-.easy {
+.reviewBtnSafe {
   background: rgba(92, 138, 97, 0.18);
 }
 
-.helper {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 16px;
+.reviewHotkey {
+  font-family: var(--font-pixel), monospace;
+  font-size: 0.72rem;
+  color: var(--ink-dim);
 }
 
 .emptyWrap {
+  display: grid;
+  place-items: center;
   padding: 48px 24px;
   text-align: center;
-  background: rgba(255, 253, 247, 0.78);
-  border: 1px solid var(--line);
-  border-radius: 24px;
-  box-shadow: var(--shadow);
 }
 
 @media (max-width: 900px) {
-  .stats {
-    grid-template-columns: 1fr;
+  .viewport {
+    gap: 12px;
+    min-height: calc(100vh - 112px);
+  }
+
+  .topbar {
+    gap: 8px;
+  }
+
+  .card {
+    grid-template-rows: auto auto auto auto minmax(0, 1fr) auto;
+    gap: 14px;
+    padding: 18px 16px 16px;
+  }
+
+  .reviewActions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding-top: 4px;
+  }
+
+  .badgeRow {
+    gap: 6px;
+  }
+
+  .badge {
+    padding: 3px 8px;
+    font-size: 0.72rem;
+  }
+
+  .dueText {
+    font-size: 0.92rem;
+    line-height: 1.4;
+  }
+
+  .wordBlock {
+    gap: 8px;
+  }
+
+  .word {
+    font-size: clamp(2.2rem, 10vw, 3.4rem);
+  }
+
+  .gloss {
+    font-size: 1rem;
+  }
+
+  .contextToggle {
+    padding: 9px 12px;
+    border-radius: 12px;
+  }
+
+  .contextSection {
+    max-height: 140px;
+    padding: 12px 14px;
+  }
+
+  .reviewBtn {
+    min-height: 84px;
+    padding: 12px 14px;
+    border-radius: 16px;
+  }
+}
+
+@media (max-width: 640px) {
+  .topbar {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .statCard {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 11px 12px;
+    border-radius: 18px;
+  }
+
+  .statLabel {
+    font-size: 0.8rem;
+    line-height: 1.25;
+  }
+
+  .statValue {
+    font-size: 1.24rem;
+    flex-shrink: 0;
+  }
+
+  .card {
+    gap: 12px;
+    padding: 16px 14px 14px;
+    border-radius: 20px;
+  }
+
+  .cardHeader {
+    gap: 8px;
+  }
+
+  .word {
+    font-size: clamp(2rem, 13vw, 3rem);
+  }
+
+  .reviewActions {
+    align-self: end;
+  }
+
+  .reviewBtn {
+    min-height: 76px;
+  }
+
+  .reviewHotkey {
+    font-size: 0.68rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .viewport {
+    min-height: calc(100vh - 104px);
+  }
+
+  .statCard {
+    padding: 10px 10px;
+  }
+
+  .statLabel {
+    font-size: 0.74rem;
+  }
+
+  .statValue {
+    font-size: 1.08rem;
+  }
+
+  .badge {
+    font-size: 0.68rem;
+  }
+
+  .dueText {
+    font-size: 0.86rem;
+  }
+
+  .reviewBtn {
+    min-height: 72px;
+    padding: 11px 12px;
   }
 }

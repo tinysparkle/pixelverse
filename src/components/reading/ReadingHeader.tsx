@@ -6,8 +6,7 @@ import styles from "./reading-shell.module.css";
 
 const TABS = [
   { href: "/reading", label: "阅读训练" },
-  { href: "/reading/vocab", label: "我的生词本" },
-  { href: "/reading/review", label: "今日复习" },
+  { href: "/reading/review", label: "单词卡片" },
 ];
 
 export default function ReadingHeader({

@@ -125,17 +125,6 @@ export interface VocabSummary {
 	updatedAt: string;
 }
 
-export interface VocabContext {
-	annotationId: string;
-	readingItemId: string;
-	readingItemTitle: string;
-	selectedText: string;
-	anchorStart: number;
-	anchorEnd: number;
-	snippet: string;
-	createdAt: string;
-}
-
 export interface ReadingAnnotationRecord {
 	id: string;
 	readingItemId: string;
@@ -176,6 +165,10 @@ export interface ReadingReviewCardRecord {
 	contextReadingItemId: string | null;
 	contextReadingItemTitle: string | null;
 	contextSnippet: string | null;
+}
+
+export interface ReadingStudyCard extends ReadingReviewCardRecord {
+	isDue: boolean;
 }
 
 export interface ReviewForecast {

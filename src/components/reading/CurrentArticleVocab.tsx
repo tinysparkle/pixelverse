@@ -3,6 +3,11 @@
 import type { ReadingAnnotationRecord } from "@/lib/db/types";
 import styles from "./reading.module.css";
 
+const MASTERY_LABELS = {
+  learning: "学习中",
+  known: "已掌握",
+} as const;
+
 export default function CurrentArticleVocab({
   annotations,
   onJump,
@@ -51,8 +56,10 @@ export default function CurrentArticleVocab({
                 <span className={`${styles.badge} ${styles.badgeCompact} ${entry.kind === "word" ? styles.badgeWord : styles.badgePhrase}`}>
                   {entry.kind === "word" ? "生词" : "短语"}
                 </span>
-                {entry.masteryState ? (
-                  <span className={`${styles.badge} ${styles.badgeCompact}`}>{entry.masteryState}</span>
+                {entry.masteryState && entry.masteryState in MASTERY_LABELS ? (
+                  <span className={`${styles.badge} ${styles.badgeCompact}`}>
+                    {MASTERY_LABELS[entry.masteryState as keyof typeof MASTERY_LABELS]}
+                  </span>
                 ) : null}
               </span>
             </button>

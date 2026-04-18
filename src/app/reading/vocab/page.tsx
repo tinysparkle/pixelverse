@@ -1,10 +1,10 @@
-import VocabPage from "@/components/reading/VocabPage";
+import { redirect } from "next/navigation";
 
 export const metadata = {
-  title: "我的生词本 - Pixelverse",
-  description: "跨文章管理你的英语生词与短语。",
+  title: "单词卡片 - Pixelverse",
+  description: "词库与复习卡片已合并到统一页面。",
 };
 
 export default function ReadingVocabRoute() {
-  return <VocabPage />;
+  redirect("/reading/review");
 }
