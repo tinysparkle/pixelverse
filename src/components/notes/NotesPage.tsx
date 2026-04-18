@@ -846,8 +846,7 @@ export default function NotesPage() {
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.6rem" }}>
             <Link className={styles.backLink} href="/">← Pixelverse</Link>
             <Link className={styles.backLink} href="/reading">阅读训练</Link>
-            <Link className={styles.backLink} href="/reading/vocab">生词本</Link>
-            <Link className={styles.backLink} href="/reading/review">今日复习</Link>
+            <Link className={styles.backLink} href="/reading/review">单词卡片</Link>
           </div>
           {isMobile ? (
             <button
