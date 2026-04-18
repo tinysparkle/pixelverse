@@ -1,6 +1,13 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { createPortal } from "react-dom";
 import styles from "./reading.module.css";
 
@@ -52,7 +59,7 @@ export default function SelectionPopover({
   useEffect(() => {
     if (!selection) return;
 
-    function handlePointerDown(event: PointerEvent | MouseEvent | TouchEvent) {
+    function handlePointerDown(event: globalThis.PointerEvent | TouchEvent) {
       if (!popoverRef.current?.contains(event.target as Node)) {
         onClose();
       }
@@ -75,6 +82,11 @@ export default function SelectionPopover({
   if (typeof document === "undefined" || !selection) return null;
 
   const isRemove = selection.mode === "remove";
+  const preventButtonFocus = (
+    event: ReactPointerEvent<HTMLButtonElement> | ReactMouseEvent<HTMLButtonElement>
+  ) => {
+    event.preventDefault();
+  };
 
   return createPortal(
     <div
@@ -88,6 +100,8 @@ export default function SelectionPopover({
           <button
             type="button"
             className={styles.secondaryBtn}
+            onPointerDown={preventButtonFocus}
+            onMouseDown={preventButtonFocus}
             onClick={() => {
               onRemoveAnnotation?.();
             }}
@@ -96,10 +110,22 @@ export default function SelectionPopover({
           </button>
         ) : (
           <>
-            <button type="button" className={styles.secondaryBtn} onClick={() => onPick("word")}>
+            <button
+              type="button"
+              className={styles.secondaryBtn}
+              onPointerDown={preventButtonFocus}
+              onMouseDown={preventButtonFocus}
+              onClick={() => onPick("word")}
+            >
               加入生词
             </button>
-            <button type="button" className={styles.secondaryBtn} onClick={() => onPick("phrase")}>
+            <button
+              type="button"
+              className={styles.secondaryBtn}
+              onPointerDown={preventButtonFocus}
+              onMouseDown={preventButtonFocus}
+              onClick={() => onPick("phrase")}
+            >
               加入短语
             </button>
           </>

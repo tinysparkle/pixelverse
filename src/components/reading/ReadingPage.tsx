@@ -43,6 +43,12 @@ export default function ReadingPage() {
     activeItemIdRef.current = activeItem?.id ?? null;
   }, [activeItem?.id]);
 
+  const restoreScrollPosition = useCallback((scrollX: number, scrollY: number) => {
+    window.requestAnimationFrame(() => {
+      window.scrollTo(scrollX, scrollY);
+    });
+  }, []);
+
   useEffect(() => {
     return () => {
       itemAbortRef.current?.abort();
@@ -224,6 +230,8 @@ export default function ReadingPage() {
 
     const { annotationId } = selection;
     const itemId = activeItem.id;
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
     setSelection(null);
     setBusy(true);
     try {
@@ -238,6 +246,7 @@ export default function ReadingPage() {
 
       setAnnotations((current) => current.filter((a) => a.id !== annotationId));
       setStatusMessage("已移除该处标注与高亮。");
+      restoreScrollPosition(scrollX, scrollY);
     } finally {
       setBusy(false);
     }
@@ -248,6 +257,8 @@ export default function ReadingPage() {
 
     const pendingSelection = selection;
     const itemId = activeItem.id;
+    const scrollX = window.scrollX;
+    const scrollY = window.scrollY;
     setSelection(null);
     setBusy(true);
     try {
@@ -270,6 +281,7 @@ export default function ReadingPage() {
       setAnnotations((current) => [...current, data].sort((left, right) => left.anchorStart - right.anchorStart));
       setFocusAnnotationId(data.id);
       setStatusMessage("词条已加入生词系统。");
+      restoreScrollPosition(scrollX, scrollY);
       window.setTimeout(() => setFocusAnnotationId((value) => (value === data.id ? null : value)), 1200);
 
       if (!data.vocabGlossCn) {
