@@ -223,10 +223,8 @@
 }
 
 .glossText {
-  position: absolute;
-  left: 50%;
-  top: -0.15em;
-  transform: translate(-50%, -100%);
+  display: inline-flex;
+  align-items: center;
   white-space: nowrap;
   color: var(--accent);
   font-size: 0.62em;
@@ -235,6 +233,53 @@
   letter-spacing: 0;
   user-select: none;
   pointer-events: none;
+}
+
+.glossBadge {
+  position: absolute;
+  left: 0;
+  top: -0.1em;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transform: translate(0, -100%);
+  white-space: nowrap;
+  z-index: 2;
+}
+
+.inlinePronounceBtn,
+.vocabPronounceBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 0;
+  color: var(--ink);
+  background: rgba(255, 253, 247, 0.92);
+  cursor: pointer;
+  transition: transform 160ms ease, background-color 160ms ease, color 160ms ease;
+}
+
+.inlinePronounceBtn:disabled,
+.vocabPronounceBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.inlinePronounceBtn {
+  width: 1.34em;
+  height: 1.34em;
+  padding: 0;
+  border-radius: 999px;
+  color: var(--accent);
+  background: rgba(255, 253, 247, 0.96);
+  box-shadow: 0 3px 10px rgba(42, 38, 35, 0.12);
+}
+
+.inlinePronounceBtnActive,
+.vocabPronounceBtnActive {
+  color: white;
+  background: var(--accent);
 }
 
 .wordMark {
@@ -257,14 +302,16 @@
   margin-top: 16px;
 }
 
+.vocabItemRow {
+  position: relative;
+}
+
 .vocabItem {
+  position: relative;
   display: flex;
-  flex-direction: row;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
+  align-items: stretch;
   width: 100%;
-  padding: 10px 12px;
+  padding: 10px 48px 38px 12px;
   border: 1px solid transparent;
   border-radius: 14px;
   text-align: left;
@@ -274,14 +321,27 @@
   min-width: 0;
 }
 
+.vocabPronounceBtn {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  background: rgba(47, 93, 138, 0.1);
+  box-shadow: 0 2px 8px rgba(42, 38, 35, 0.08);
+}
+
 .vocabItemBadges {
   display: flex;
   flex-wrap: wrap;
-  flex-shrink: 0;
   justify-content: flex-end;
   gap: 4px;
-  max-width: 72px;
+  max-width: 120px;
   pointer-events: none;
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
 }
 
 .badgeCompact {
@@ -362,10 +422,122 @@
 }
 
 .popoverText {
-  margin-bottom: 10px;
   color: var(--popover-ink-soft);
   font-size: 0.9rem;
   line-height: 1.5;
+}
+
+.popoverHeader {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-bottom: 10px;
+}
+
+.insightCard {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(47, 93, 138, 0.06);
+}
+
+.insightTopRow,
+.insightLoadingRow,
+.insightTags {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.insightGloss {
+  font-size: 1rem;
+  color: var(--popover-ink);
+}
+
+.insightMeta,
+.insightTag,
+.insightPhonetic,
+.insightExampleCn,
+.insightMessage,
+.insightDefinition {
+  color: var(--popover-ink-soft);
+}
+
+.insightMeta,
+.insightTag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  background: rgba(47, 93, 138, 0.1);
+}
+
+.insightPhonetic,
+.insightDefinition,
+.insightExample,
+.insightMessage {
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+.insightExample {
+  display: grid;
+  gap: 4px;
+}
+
+.insightSkeletonWide,
+.insightSkeletonShort,
+.insightSkeletonTag,
+.insightSkeletonBlock {
+  display: inline-block;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(47, 93, 138, 0.08), rgba(47, 93, 138, 0.16), rgba(47, 93, 138, 0.08));
+  background-size: 200% 100%;
+  animation: insightPulse 1.2s ease-in-out infinite;
+}
+
+.insightSkeletonWide {
+  width: 92px;
+  height: 18px;
+}
+
+.insightSkeletonShort {
+  width: 54px;
+  height: 18px;
+}
+
+.insightSkeletonTag {
+  width: 72px;
+  height: 24px;
+}
+
+.insightSkeletonBlock {
+  width: 100%;
+  height: 14px;
+  border-radius: 8px;
+}
+
+.popoverPronounceBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  color: var(--accent);
+  background: transparent;
+  font: inherit;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.popoverPronounceBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .popoverActions {
@@ -380,7 +552,19 @@
 }
 
 .popover .secondaryBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background: var(--popover-accent);
+}
+
+@keyframes insightPulse {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .popover .ghostBtn {
@@ -420,5 +604,49 @@
 @media (max-width: 640px) {
   .vocabList {
     column-count: 1;
+  }
+
+  .vocabItemRow {
+    position: relative;
+  }
+
+  .vocabPronounceBtn {
+    top: 8px;
+    right: 8px;
+    width: 28px;
+    height: 28px;
+    border-radius: 9px;
+  }
+
+  .vocabItem {
+    padding: 10px 44px 34px 12px;
+  }
+
+  .vocabItemBadges {
+    right: 8px;
+    bottom: 8px;
+  }
+
+  .glossBadge {
+    gap: 4px;
+  }
+
+  .inlinePronounceBtn {
+    width: 1.28em;
+    height: 1.28em;
+  }
+
+  .popoverActions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .popover .secondaryBtn {
+    justify-content: center;
+    width: 100%;
+  }
+
+  .popoverHeader {
+    align-items: flex-start;
   }
 }

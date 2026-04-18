@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { Volume2, VolumeX } from "lucide-react";
 import type { ReadingAnnotationRecord, ReadingItemRecord } from "@/lib/db/types";
 import type { ReadingSelectionPayload } from "./SelectionPopover";
 import styles from "./reading.module.css";
@@ -37,110 +38,125 @@ export default function ArticleReader({
   annotations,
   focusAnnotationId,
   onSelectionChange,
+  onPronounce,
+  pronunciationSupported,
+  speakingText,
 }: {
   item: ReadingItemRecord | null;
   annotations: ReadingAnnotationRecord[];
   focusAnnotationId: string | null;
   onSelectionChange: (payload: ReadingSelectionPayload | null) => void;
+  onPronounce: (text: string) => void;
+  pronunciationSupported: boolean;
+  speakingText: string | null;
 }) {
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const selectionTimerRef = useRef<number | null>(null);
+  const finalizeTimerRef = useRef<number | null>(null);
+  const isPointerSelectingRef = useRef(false);
 
   const paragraphs = useMemo(() => {
     if (!item) return [];
     return getParagraphRanges(item.contentText);
   }, [item]);
 
-  function handleSelection() {
+  function readSelectionPayload(): ReadingSelectionPayload | null {
     const root = rootRef.current;
     const selection = window.getSelection();
     if (!root || !selection || selection.rangeCount === 0 || selection.isCollapsed) {
-      onSelectionChange(null);
-      return;
+      return null;
     }
 
     const range = selection.getRangeAt(0);
     if (!root.contains(range.commonAncestorContainer)) {
-      onSelectionChange(null);
-      return;
+      return null;
     }
 
     const startHost = findOffsetHost(range.startContainer);
     const endHost = findOffsetHost(range.endContainer);
     if (!startHost || !endHost) {
-      onSelectionChange(null);
-      return;
+      return null;
     }
 
     const baseStart = Number(startHost.dataset.offset ?? "");
     const baseEnd = Number(endHost.dataset.offset ?? "");
     if (!Number.isFinite(baseStart) || !Number.isFinite(baseEnd)) {
-      onSelectionChange(null);
-      return;
+      return null;
     }
 
     const anchorStart = baseStart + range.startOffset;
     const anchorEnd = baseEnd + range.endOffset;
     if (anchorEnd <= anchorStart || !item) {
-      onSelectionChange(null);
-      return;
+      return null;
     }
 
     const text = item.contentText.slice(anchorStart, anchorEnd);
     const rect = range.getBoundingClientRect();
     if (!text.trim() || (!rect.width && !rect.height)) {
-      onSelectionChange(null);
-      return;
+      return null;
     }
 
     const exactMatch = annotations.find(
       (annotation) => annotation.anchorStart === anchorStart && annotation.anchorEnd === anchorEnd
     );
     if (exactMatch) {
-      onSelectionChange({
+      return {
         text,
         anchorStart,
         anchorEnd,
         rect,
         mode: "remove",
         annotationId: exactMatch.id,
-      });
-      return;
+      };
     }
 
-    onSelectionChange({
+    return {
       text,
       anchorStart,
       anchorEnd,
       rect,
       mode: "add",
-    });
+    };
   }
 
-  function scheduleSelectionUpdate(delay = 0) {
-    if (selectionTimerRef.current !== null) {
-      window.clearTimeout(selectionTimerRef.current);
+  function flushSelection() {
+    onSelectionChange(readSelectionPayload());
+  }
+
+  function scheduleFinalizeSelection(delay = 200) {
+    if (finalizeTimerRef.current !== null) {
+      window.clearTimeout(finalizeTimerRef.current);
     }
 
-    selectionTimerRef.current = window.setTimeout(() => {
-      selectionTimerRef.current = null;
-      handleSelection();
+    finalizeTimerRef.current = window.setTimeout(() => {
+      finalizeTimerRef.current = null;
+      flushSelection();
     }, delay);
   }
 
   useEffect(() => {
     function handleDocumentSelectionChange() {
-      scheduleSelectionUpdate(20);
+      const payload = readSelectionPayload();
+
+      if (!payload) {
+        onSelectionChange(null);
+        return;
+      }
+
+      if (isPointerSelectingRef.current) {
+        return;
+      }
+
+      scheduleFinalizeSelection(200);
     }
 
     document.addEventListener("selectionchange", handleDocumentSelectionChange);
     return () => {
       document.removeEventListener("selectionchange", handleDocumentSelectionChange);
-      if (selectionTimerRef.current !== null) {
-        window.clearTimeout(selectionTimerRef.current);
+      if (finalizeTimerRef.current !== null) {
+        window.clearTimeout(finalizeTimerRef.current);
       }
     };
-  });
+  }, [annotations, item, onSelectionChange]);
 
   if (!item) {
     return (
@@ -164,10 +180,23 @@ export default function ArticleReader({
         <div
           ref={rootRef}
           className={styles.articleBody}
-          onMouseUp={handleSelection}
-          onPointerUp={() => scheduleSelectionUpdate(0)}
-          onTouchEnd={() => scheduleSelectionUpdate(60)}
-          onKeyUp={handleSelection}
+          onPointerDown={() => {
+            isPointerSelectingRef.current = true;
+            onSelectionChange(null);
+          }}
+          onPointerUp={() => {
+            isPointerSelectingRef.current = false;
+            scheduleFinalizeSelection(200);
+          }}
+          onMouseUp={() => {
+            isPointerSelectingRef.current = false;
+            scheduleFinalizeSelection(200);
+          }}
+          onTouchEnd={() => {
+            isPointerSelectingRef.current = false;
+            scheduleFinalizeSelection(200);
+          }}
+          onKeyUp={() => scheduleFinalizeSelection(200)}
           onContextMenu={(event) => event.preventDefault()}
         >
           {paragraphs.map((paragraph) => {
@@ -206,7 +235,35 @@ export default function ArticleReader({
                   data-gloss={annotation.vocabGlossCn ?? undefined}
                 >
                   {annotation.vocabGlossCn ? (
-                    <span className={styles.glossText}>{annotation.vocabGlossCn}</span>
+                    <span className={styles.glossBadge}>
+                      <span className={styles.glossText}>{annotation.vocabGlossCn}</span>
+                      <button
+                        type="button"
+                        className={`${styles.inlinePronounceBtn} ${speakingText === (annotation.vocabText ?? annotation.selectedText).trim() ? styles.inlinePronounceBtnActive : ""}`}
+                        disabled={!pronunciationSupported}
+                        aria-label={`播放 ${annotation.vocabText ?? annotation.selectedText} 的发音`}
+                        title={pronunciationSupported ? "播放发音" : "当前浏览器不支持发音"}
+                        onPointerDown={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                        }}
+                        onMouseDown={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                        }}
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          onPronounce(annotation.vocabText ?? annotation.selectedText);
+                        }}
+                      >
+                        {speakingText === (annotation.vocabText ?? annotation.selectedText).trim() ? (
+                          <VolumeX size={12} strokeWidth={2.2} />
+                        ) : (
+                          <Volume2 size={12} strokeWidth={2.2} />
+                        )}
+                      </button>
+                    </span>
                   ) : null}
                   {markText}
                 </span>

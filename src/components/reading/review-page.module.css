@@ -68,6 +68,13 @@
   gap: 10px;
 }
 
+.wordRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .badgeRow {
   display: flex;
   flex-wrap: wrap;
@@ -101,6 +108,65 @@
 .gloss {
   font-size: clamp(1.08rem, 2vw, 1.28rem);
   color: var(--ink-soft);
+}
+
+.metaRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.metaChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  background: rgba(47, 93, 138, 0.08);
+}
+
+.definition,
+.exampleBlock,
+.exampleCn {
+  color: var(--ink-soft);
+}
+
+.definition,
+.exampleBlock {
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+.exampleBlock {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.pronounceBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  border: 0;
+  border-radius: 14px;
+  color: var(--ink);
+  background: rgba(47, 93, 138, 0.1);
+  cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.pronounceBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pronounceBtnActive {
+  color: white;
+  background: var(--accent);
 }
 
 .contextToggle,
@@ -213,8 +279,18 @@
     font-size: clamp(2.2rem, 10vw, 3.4rem);
   }
 
+  .pronounceBtn {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+  }
+
   .gloss {
     font-size: 1rem;
+  }
+
+  .metaRow {
+    gap: 6px;
   }
 
   .contextToggle {

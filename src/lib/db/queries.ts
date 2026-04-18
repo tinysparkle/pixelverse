@@ -13,6 +13,7 @@ import type {
 	ReadingLevel,
 	ReadingReviewCardRecord,
 	ReadingStudyCard,
+	ReadingTermInsight,
 	ReadingSourceType,
 	ReadingStatus,
 	ReviewForecast,
@@ -91,6 +92,12 @@ type VocabEntryRow = RowDataPacket & {
 	text: string;
 	normalized_text: string;
 	gloss_cn: string | null;
+	phonetic: string | null;
+	part_of_speech: string | null;
+	grammar_tags_json: string | null;
+	definition_en: string | null;
+	example_en: string | null;
+	example_cn: string | null;
 	note_text: string | null;
 	mastery_state: VocabMasteryState;
 	created_at: Date | string;
@@ -103,6 +110,9 @@ type VocabSummaryRow = RowDataPacket & {
 	kind: VocabEntryKind;
 	text: string;
 	gloss_cn: string | null;
+	phonetic: string | null;
+	part_of_speech: string | null;
+	grammar_tags_json: string | null;
 	note_text: string | null;
 	mastery_state: VocabMasteryState;
 	article_count: number;
@@ -124,6 +134,12 @@ type ReadingAnnotationRow = RowDataPacket & {
 	deleted_at: Date | string | null;
 	vocab_text: string | null;
 	vocab_gloss_cn: string | null;
+	vocab_phonetic: string | null;
+	vocab_part_of_speech: string | null;
+	vocab_grammar_tags_json: string | null;
+	vocab_definition_en: string | null;
+	vocab_example_en: string | null;
+	vocab_example_cn: string | null;
 	vocab_kind: VocabEntryKind | null;
 	vocab_note_text: string | null;
 	vocab_mastery_state: VocabMasteryState | null;
@@ -144,9 +160,33 @@ type ReadingReviewCardRow = RowDataPacket & {
 	deleted_at: Date | string | null;
 	vocab_text: string;
 	vocab_gloss_cn: string | null;
+	vocab_phonetic: string | null;
+	vocab_part_of_speech: string | null;
+	vocab_grammar_tags_json: string | null;
+	vocab_definition_en: string | null;
+	vocab_example_en: string | null;
+	vocab_example_cn: string | null;
 	vocab_kind: VocabEntryKind;
 	vocab_note_text: string | null;
 	vocab_mastery_state: VocabMasteryState;
+};
+
+type ReadingTermInsightRow = RowDataPacket & {
+	id: string;
+	user_id: string;
+	text: string;
+	normalized_text: string;
+	detected_kind: VocabEntryKind;
+	gloss_cn: string;
+	phonetic: string | null;
+	part_of_speech: string | null;
+	grammar_tags_json: string | null;
+	definition_en: string | null;
+	example_en: string | null;
+	example_cn: string | null;
+	source_sentence: string | null;
+	created_at: Date | string;
+	updated_at: Date | string;
 };
 
 type LatestReviewContextRow = RowDataPacket & {
@@ -161,6 +201,13 @@ type LatestReviewContextRow = RowDataPacket & {
 };
 
 type CountRow = RowDataPacket & { count: number };
+
+type MysqlErrorLike = {
+	code?: string;
+	message?: string;
+};
+
+let hasWarnedMissingReadingTermInsightsTable = false;
 
 function toIsoString(value: Date | string | null) {
 	if (!value) {
@@ -179,6 +226,17 @@ function toNumber(value: string | number | null) {
 	return typeof value === "number" ? value : Number(value);
 }
 
+function parseJsonArray(value: string | null) {
+	if (!value) return [];
+
+	try {
+		const parsed = JSON.parse(value);
+		return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+	} catch {
+		return [];
+	}
+}
+
 function parseTags(raw: string | null): string[] {
 	if (!raw) return [];
 	return raw.split(",").map((t) => t.trim()).filter(Boolean);
@@ -186,6 +244,21 @@ function parseTags(raw: string | null): string[] {
 
 function escapeLike(value: string) {
 	return value.replace(/[\\%_]/g, "\\$&");
+}
+
+function isMissingReadingTermInsightsTable(error: unknown) {
+	if (!error || typeof error !== "object") return false;
+	return (error as MysqlErrorLike).code === "ER_NO_SUCH_TABLE";
+}
+
+function warnMissingReadingTermInsightsTable(error: unknown) {
+	if (hasWarnedMissingReadingTermInsightsTable) return;
+	hasWarnedMissingReadingTermInsightsTable = true;
+	const detail = error instanceof Error ? error.message : "unknown error";
+	console.warn(
+		"[reading] reading_term_insights table is missing; falling back to uncached AI insights. Apply migrations/20260418_005_add_term_insights.sql. Detail:",
+		detail
+	);
 }
 
 function createContextSnippet(contentText: string, start: number, end: number) {
@@ -279,6 +352,12 @@ function mapVocabEntry(row: VocabEntryRow): VocabEntryRecord {
 		text: row.text,
 		normalizedText: row.normalized_text,
 		glossCn: row.gloss_cn,
+		phonetic: row.phonetic,
+		partOfSpeech: row.part_of_speech,
+		grammarTags: parseJsonArray(row.grammar_tags_json),
+		definitionEn: row.definition_en,
+		exampleEn: row.example_en,
+		exampleCn: row.example_cn,
 		noteText: row.note_text,
 		masteryState: row.mastery_state,
 		createdAt: toIsoString(row.created_at) ?? new Date().toISOString(),
@@ -293,6 +372,9 @@ function mapVocabSummary(row: VocabSummaryRow): VocabSummary {
 		kind: row.kind,
 		text: row.text,
 		glossCn: row.gloss_cn,
+		phonetic: row.phonetic,
+		partOfSpeech: row.part_of_speech,
+		grammarTags: parseJsonArray(row.grammar_tags_json),
 		noteText: row.note_text,
 		masteryState: row.mastery_state,
 		articleCount: row.article_count,
@@ -316,6 +398,12 @@ function mapReadingAnnotation(row: ReadingAnnotationRow): ReadingAnnotationRecor
 		deletedAt: toIsoString(row.deleted_at),
 		vocabText: row.vocab_text,
 		vocabGlossCn: row.vocab_gloss_cn,
+		vocabPhonetic: row.vocab_phonetic,
+		vocabPartOfSpeech: row.vocab_part_of_speech,
+		vocabGrammarTags: parseJsonArray(row.vocab_grammar_tags_json),
+		vocabDefinitionEn: row.vocab_definition_en,
+		vocabExampleEn: row.vocab_example_en,
+		vocabExampleCn: row.vocab_example_cn,
 		vocabKind: row.vocab_kind,
 		vocabNoteText: row.vocab_note_text,
 		vocabMasteryState: row.vocab_mastery_state,
@@ -338,6 +426,12 @@ function mapReadingReviewCard(row: ReadingReviewCardRow): ReadingReviewCardRecor
 		deletedAt: toIsoString(row.deleted_at),
 		vocabText: row.vocab_text,
 		vocabGlossCn: row.vocab_gloss_cn,
+		vocabPhonetic: row.vocab_phonetic,
+		vocabPartOfSpeech: row.vocab_part_of_speech,
+		vocabGrammarTags: parseJsonArray(row.vocab_grammar_tags_json),
+		vocabDefinitionEn: row.vocab_definition_en,
+		vocabExampleEn: row.vocab_example_en,
+		vocabExampleCn: row.vocab_example_cn,
 		vocabKind: row.vocab_kind,
 		vocabNoteText: row.vocab_note_text,
 		vocabMasteryState: row.vocab_mastery_state,
@@ -345,6 +439,27 @@ function mapReadingReviewCard(row: ReadingReviewCardRow): ReadingReviewCardRecor
 		contextReadingItemId: null,
 		contextReadingItemTitle: null,
 		contextSnippet: null,
+	};
+}
+
+function mapReadingTermInsight(row: ReadingTermInsightRow): ReadingTermInsight {
+	return {
+		id: row.id,
+		userId: row.user_id,
+		text: row.text,
+		normalizedText: row.normalized_text,
+		detectedKind: row.detected_kind,
+		glossCn: row.gloss_cn,
+		phonetic: row.phonetic,
+		partOfSpeech: row.part_of_speech,
+		grammarTags: parseJsonArray(row.grammar_tags_json),
+		definitionEn: row.definition_en,
+		exampleEn: row.example_en,
+		exampleCn: row.example_cn,
+		sourceSentence: row.source_sentence,
+		createdAt: toIsoString(row.created_at) ?? new Date().toISOString(),
+		updatedAt: toIsoString(row.updated_at) ?? new Date().toISOString(),
+		fromCache: true,
 	};
 }
 
@@ -943,7 +1058,8 @@ export async function softDeleteReadingItemForUser(readingItemId: string, userId
 
 export async function getVocabEntryByIdForUser(vocabEntryId: string, userId: string) {
 	const rows = await queryRows<VocabEntryRow[]>(
-		`SELECT id, user_id, kind, text, normalized_text, gloss_cn, note_text, mastery_state,
+		`SELECT id, user_id, kind, text, normalized_text, gloss_cn, phonetic, part_of_speech, grammar_tags_json,
+		        definition_en, example_en, example_cn, note_text, mastery_state,
 		        created_at, updated_at, deleted_at
 		 FROM vocab_entries
 		 WHERE id = ? AND user_id = ? AND deleted_at IS NULL
@@ -970,7 +1086,8 @@ export async function upsertVocabEntryForUser(
 
 	return withTransaction(async (connection) => {
 		const [existingRows] = await connection.query<VocabEntryRow[]>(
-			`SELECT id, user_id, kind, text, normalized_text, gloss_cn, note_text, mastery_state,
+			`SELECT id, user_id, kind, text, normalized_text, gloss_cn, phonetic, part_of_speech, grammar_tags_json,
+			        definition_en, example_en, example_cn, note_text, mastery_state,
 			        created_at, updated_at, deleted_at
 			 FROM vocab_entries
 			 WHERE user_id = ? AND kind = ? AND normalized_text = ? AND deleted_at IS NULL
@@ -991,7 +1108,8 @@ export async function upsertVocabEntryForUser(
 			}
 
 			const [freshRows] = await connection.query<VocabEntryRow[]>(
-				`SELECT id, user_id, kind, text, normalized_text, gloss_cn, note_text, mastery_state,
+				`SELECT id, user_id, kind, text, normalized_text, gloss_cn, phonetic, part_of_speech, grammar_tags_json,
+				        definition_en, example_en, example_cn, note_text, mastery_state,
 				        created_at, updated_at, deleted_at
 				 FROM vocab_entries
 				 WHERE id = ? AND user_id = ? AND deleted_at IS NULL
@@ -1008,13 +1126,15 @@ export async function upsertVocabEntryForUser(
 		const vocabEntryId = randomUUID();
 		await connection.execute(
 			`INSERT INTO vocab_entries (
-				id, user_id, kind, text, normalized_text, gloss_cn, note_text
-			 ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			[vocabEntryId, userId, data.kind, displayText, normalizedText, null, data.noteText ?? null]
+				id, user_id, kind, text, normalized_text, gloss_cn, phonetic, part_of_speech,
+				grammar_tags_json, definition_en, example_en, example_cn, note_text
+			 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			[vocabEntryId, userId, data.kind, displayText, normalizedText, null, null, null, null, null, null, null, data.noteText ?? null]
 		);
 
 		const [createdRows] = await connection.query<VocabEntryRow[]>(
-			`SELECT id, user_id, kind, text, normalized_text, gloss_cn, note_text, mastery_state,
+			`SELECT id, user_id, kind, text, normalized_text, gloss_cn, phonetic, part_of_speech, grammar_tags_json,
+			        definition_en, example_en, example_cn, note_text, mastery_state,
 			        created_at, updated_at, deleted_at
 			 FROM vocab_entries
 			 WHERE id = ? AND user_id = ?
@@ -1057,7 +1177,8 @@ export async function listVocabEntriesForUser(
 	}
 
 	const rows = await queryRows<VocabSummaryRow[]>(
-		`SELECT v.id, v.kind, v.text, v.gloss_cn, v.note_text, v.mastery_state,
+		`SELECT v.id, v.kind, v.text, v.gloss_cn, v.phonetic, v.part_of_speech, v.grammar_tags_json,
+		        v.note_text, v.mastery_state,
 		        COUNT(DISTINCT ri.id) AS article_count,
 		        COUNT(ri.id) AS occurrence_count,
 		        MAX(ra.created_at) AS last_annotated_at,
@@ -1070,7 +1191,8 @@ export async function listVocabEntriesForUser(
 		   ON ri.id = ra.reading_item_id
 		  AND ri.deleted_at IS NULL
 		 WHERE ${conditions.join(" AND ")}
-		 GROUP BY v.id, v.kind, v.text, v.gloss_cn, v.note_text, v.mastery_state, v.updated_at
+		 GROUP BY v.id, v.kind, v.text, v.gloss_cn, v.phonetic, v.part_of_speech, v.grammar_tags_json,
+		          v.note_text, v.mastery_state, v.updated_at
 		 ORDER BY COALESCE(MAX(ra.created_at), v.updated_at) DESC, v.updated_at DESC`,
 		values
 	);
@@ -1083,6 +1205,12 @@ export async function updateVocabEntryForUser(
 	userId: string,
 	updates: {
 		glossCn?: string | null;
+		phonetic?: string | null;
+		partOfSpeech?: string | null;
+		grammarTags?: string[] | null;
+		definitionEn?: string | null;
+		exampleEn?: string | null;
+		exampleCn?: string | null;
 		noteText?: string | null;
 		masteryState?: VocabMasteryState;
 	}
@@ -1093,6 +1221,36 @@ export async function updateVocabEntryForUser(
 	if (updates.glossCn !== undefined) {
 		fields.push("gloss_cn = ?");
 		values.push(updates.glossCn);
+	}
+
+	if (updates.phonetic !== undefined) {
+		fields.push("phonetic = ?");
+		values.push(updates.phonetic);
+	}
+
+	if (updates.partOfSpeech !== undefined) {
+		fields.push("part_of_speech = ?");
+		values.push(updates.partOfSpeech);
+	}
+
+	if (updates.grammarTags !== undefined) {
+		fields.push("grammar_tags_json = ?");
+		values.push(updates.grammarTags ? JSON.stringify(updates.grammarTags) : null);
+	}
+
+	if (updates.definitionEn !== undefined) {
+		fields.push("definition_en = ?");
+		values.push(updates.definitionEn);
+	}
+
+	if (updates.exampleEn !== undefined) {
+		fields.push("example_en = ?");
+		values.push(updates.exampleEn);
+	}
+
+	if (updates.exampleCn !== undefined) {
+		fields.push("example_cn = ?");
+		values.push(updates.exampleCn);
 	}
 
 	if (updates.noteText !== undefined) {
@@ -1127,7 +1285,10 @@ export async function listReadingAnnotationsForItem(readingItemId: string, userI
 	const rows = await queryRows<ReadingAnnotationRow[]>(
 		`SELECT ra.id, ra.reading_item_id, ra.user_id, ra.kind, ra.vocab_entry_id,
 		        ra.selected_text, ra.anchor_start, ra.anchor_end, ra.created_at, ra.deleted_at,
-		        v.text AS vocab_text, v.gloss_cn AS vocab_gloss_cn, v.kind AS vocab_kind, v.note_text AS vocab_note_text,
+		        v.text AS vocab_text, v.gloss_cn AS vocab_gloss_cn, v.phonetic AS vocab_phonetic,
+		        v.part_of_speech AS vocab_part_of_speech, v.grammar_tags_json AS vocab_grammar_tags_json,
+		        v.definition_en AS vocab_definition_en, v.example_en AS vocab_example_en, v.example_cn AS vocab_example_cn,
+		        v.kind AS vocab_kind, v.note_text AS vocab_note_text,
 		        v.mastery_state AS vocab_mastery_state
 		 FROM reading_annotations ra
 		 LEFT JOIN vocab_entries v
@@ -1145,7 +1306,10 @@ export async function getReadingAnnotationByIdForUser(annotationId: string, user
 	const rows = await queryRows<ReadingAnnotationRow[]>(
 		`SELECT ra.id, ra.reading_item_id, ra.user_id, ra.kind, ra.vocab_entry_id,
 		        ra.selected_text, ra.anchor_start, ra.anchor_end, ra.created_at, ra.deleted_at,
-		        v.text AS vocab_text, v.gloss_cn AS vocab_gloss_cn, v.kind AS vocab_kind, v.note_text AS vocab_note_text,
+		        v.text AS vocab_text, v.gloss_cn AS vocab_gloss_cn, v.phonetic AS vocab_phonetic,
+		        v.part_of_speech AS vocab_part_of_speech, v.grammar_tags_json AS vocab_grammar_tags_json,
+		        v.definition_en AS vocab_definition_en, v.example_en AS vocab_example_en, v.example_cn AS vocab_example_cn,
+		        v.kind AS vocab_kind, v.note_text AS vocab_note_text,
 		        v.mastery_state AS vocab_mastery_state
 		 FROM reading_annotations ra
 		 LEFT JOIN vocab_entries v
@@ -1308,7 +1472,10 @@ export async function listReadingStudyCardsForUser(userId: string) {
 		`SELECT rrc.id, rrc.user_id, rrc.vocab_entry_id, rrc.review_state, rrc.interval_days,
 		        rrc.due_at, rrc.last_reviewed_at, rrc.review_count, rrc.lapse_count,
 		        rrc.created_at, rrc.updated_at, rrc.deleted_at,
-		        v.text AS vocab_text, v.gloss_cn AS vocab_gloss_cn, v.kind AS vocab_kind, v.note_text AS vocab_note_text,
+		        v.text AS vocab_text, v.gloss_cn AS vocab_gloss_cn, v.phonetic AS vocab_phonetic,
+		        v.part_of_speech AS vocab_part_of_speech, v.grammar_tags_json AS vocab_grammar_tags_json,
+		        v.definition_en AS vocab_definition_en, v.example_en AS vocab_example_en, v.example_cn AS vocab_example_cn,
+		        v.kind AS vocab_kind, v.note_text AS vocab_note_text,
 		        v.mastery_state AS vocab_mastery_state
 		 FROM reading_review_cards rrc
 		 INNER JOIN vocab_entries v
@@ -1332,12 +1499,120 @@ export async function listReadingStudyCardsForUser(userId: string) {
 	}));
 }
 
+export async function getReadingTermInsightByNormalizedTextForUser(userId: string, normalizedText: string) {
+	try {
+		const rows = await queryRows<ReadingTermInsightRow[]>(
+			`SELECT id, user_id, text, normalized_text, detected_kind, gloss_cn, phonetic, part_of_speech,
+			        grammar_tags_json, definition_en, example_en, example_cn, source_sentence,
+			        created_at, updated_at
+			 FROM reading_term_insights
+			 WHERE user_id = ? AND normalized_text = ?
+			 LIMIT 1`,
+			[userId, normalizedText]
+		);
+
+		return rows[0] ? mapReadingTermInsight(rows[0]) : null;
+	} catch (error) {
+		if (isMissingReadingTermInsightsTable(error)) {
+			warnMissingReadingTermInsightsTable(error);
+			return null;
+		}
+
+		throw error;
+	}
+}
+
+export async function upsertReadingTermInsightForUser(
+	userId: string,
+	data: {
+		text: string;
+		normalizedText: string;
+		detectedKind: VocabEntryKind;
+		glossCn: string;
+		phonetic?: string | null;
+		partOfSpeech?: string | null;
+		grammarTags?: string[];
+		definitionEn?: string | null;
+		exampleEn?: string | null;
+		exampleCn?: string | null;
+		sourceSentence?: string | null;
+	}
+) {
+	const insightId = randomUUID();
+	const fallbackInsight: ReadingTermInsight = {
+		id: insightId,
+		userId,
+		text: data.text.trim().slice(0, 255),
+		normalizedText: data.normalizedText,
+		detectedKind: data.detectedKind,
+		glossCn: data.glossCn,
+		phonetic: data.phonetic ?? null,
+		partOfSpeech: data.partOfSpeech ?? null,
+		grammarTags: data.grammarTags ?? [],
+		definitionEn: data.definitionEn ?? null,
+		exampleEn: data.exampleEn ?? null,
+		exampleCn: data.exampleCn ?? null,
+		sourceSentence: data.sourceSentence ?? null,
+		createdAt: new Date().toISOString(),
+		updatedAt: new Date().toISOString(),
+		fromCache: false,
+	};
+
+	try {
+		await executeStatement(
+			`INSERT INTO reading_term_insights (
+				id, user_id, text, normalized_text, detected_kind, gloss_cn, phonetic, part_of_speech,
+				grammar_tags_json, definition_en, example_en, example_cn, source_sentence
+			 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			 ON DUPLICATE KEY UPDATE
+			   text = VALUES(text),
+			   detected_kind = VALUES(detected_kind),
+			   gloss_cn = VALUES(gloss_cn),
+			   phonetic = VALUES(phonetic),
+			   part_of_speech = VALUES(part_of_speech),
+			   grammar_tags_json = VALUES(grammar_tags_json),
+			   definition_en = VALUES(definition_en),
+			   example_en = VALUES(example_en),
+			   example_cn = VALUES(example_cn),
+			   source_sentence = VALUES(source_sentence),
+			   updated_at = UTC_TIMESTAMP()`,
+			[
+				insightId,
+				userId,
+				data.text.trim().slice(0, 255),
+				data.normalizedText,
+				data.detectedKind,
+				data.glossCn,
+				data.phonetic ?? null,
+				data.partOfSpeech ?? null,
+				JSON.stringify(data.grammarTags ?? []),
+				data.definitionEn ?? null,
+				data.exampleEn ?? null,
+				data.exampleCn ?? null,
+				data.sourceSentence ?? null,
+			]
+		);
+
+		return getReadingTermInsightByNormalizedTextForUser(userId, data.normalizedText);
+	} catch (error) {
+		if (isMissingReadingTermInsightsTable(error)) {
+			warnMissingReadingTermInsightsTable(error);
+			return fallbackInsight;
+		}
+
+		throw error;
+	}
+}
+
 export async function getReviewCardByIdForUser(cardId: string, userId: string) {
 	const rows = await queryRows<ReadingReviewCardRow[]>(
 		`SELECT rrc.id, rrc.user_id, rrc.vocab_entry_id, rrc.review_state, rrc.interval_days,
 		        rrc.due_at, rrc.last_reviewed_at, rrc.review_count, rrc.lapse_count,
 		        rrc.created_at, rrc.updated_at, rrc.deleted_at,
-		        v.text AS vocab_text, v.gloss_cn AS vocab_gloss_cn, v.kind AS vocab_kind, v.note_text AS vocab_note_text,
+		        v.text AS vocab_text, v.gloss_cn AS vocab_gloss_cn, v.phonetic AS vocab_phonetic,
+		        v.part_of_speech AS vocab_part_of_speech, v.grammar_tags_json AS vocab_grammar_tags_json,
+		        v.definition_en AS vocab_definition_en, v.example_en AS vocab_example_en, v.example_cn AS vocab_example_cn,
+		        v.kind AS vocab_kind, v.note_text AS vocab_note_text,
 		        v.mastery_state AS vocab_mastery_state
 		 FROM reading_review_cards rrc
 		 INNER JOIN vocab_entries v
@@ -1359,7 +1634,10 @@ export async function createReviewCardForVocabEntry(userId: string, vocabEntryId
 		`SELECT rrc.id, rrc.user_id, rrc.vocab_entry_id, rrc.review_state, rrc.interval_days,
 		        rrc.due_at, rrc.last_reviewed_at, rrc.review_count, rrc.lapse_count,
 		        rrc.created_at, rrc.updated_at, rrc.deleted_at,
-		        v.text AS vocab_text, v.gloss_cn AS vocab_gloss_cn, v.kind AS vocab_kind, v.note_text AS vocab_note_text,
+		        v.text AS vocab_text, v.gloss_cn AS vocab_gloss_cn, v.phonetic AS vocab_phonetic,
+		        v.part_of_speech AS vocab_part_of_speech, v.grammar_tags_json AS vocab_grammar_tags_json,
+		        v.definition_en AS vocab_definition_en, v.example_en AS vocab_example_en, v.example_cn AS vocab_example_cn,
+		        v.kind AS vocab_kind, v.note_text AS vocab_note_text,
 		        v.mastery_state AS vocab_mastery_state
 		 FROM reading_review_cards rrc
 		 INNER JOIN vocab_entries v

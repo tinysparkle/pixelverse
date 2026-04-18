@@ -5,6 +5,8 @@ import {
   type ReadingLevel,
   type VocabEntryKind,
   getReadingWordRange,
+  normalizeTitle,
+  normalizeTopic,
 } from "@/components/reading/readingUtils";
 
 const ARTICLE_SYSTEM_PROMPT = [
@@ -13,6 +15,8 @@ const ARTICLE_SYSTEM_PROMPT = [
   "请生成适合阅读训练的英文文章，而不是教学大纲。",
   "文章必须自然、可读、有明确主题，并保留适度挑战。",
   "避免过难专有名词堆砌，避免过于口语或网络俚语。",
+  "正文只能使用自然英文段落，不要项目符号、编号、小标题、括号补充、特殊符号串或 Markdown。",
+  "段落之间只允许用空行分隔；段内不要随意换行。",
   "输出必须严格遵守结构化格式。",
 ].join("\n");
 
@@ -44,6 +48,21 @@ const FAST_GLOSS_SYSTEM = [
   "反例（禁止）：撞上",
 ].join("\n");
 
+const INSIGHT_SYSTEM_PROMPT = [
+  "你是英语阅读悬浮词典助手。",
+  "用户会给你一个英文单词或短语，以及它所在句子和段落。",
+  "请输出适合阅读时快速查看的轻量词典信息。",
+  "要求：",
+  "1. gloss_cn 必须是贴合当前语境的简短中文义，2 到 12 个汉字。",
+  "2. phonetic 尽量给常见英式或美式音标，缺失时可留空字符串。",
+  "3. part_of_speech 只给一个最主要词性，如 noun / verb / adjective / adverb / phrase。",
+  "4. grammar_tags 最多 3 个，使用简短英文标签，如 countable / transitive / past participle。",
+  "5. definition_en 用一条简短英文释义，不要长段落。",
+  "6. example_en 给一条例句，优先可复用原句或轻微改写；example_cn 给对应简短中文。",
+  "7. detected_kind 只能是 word 或 phrase。",
+  "输出必须严格遵守结构化格式。",
+].join("\n");
+
 const articleSchema = z.object({
   title: z.string(),
   topic: z.string(),
@@ -58,8 +77,20 @@ const glossSchema = z.object({
   gloss_cn: z.string().min(2).max(12),
 });
 
+const insightSchema = z.object({
+  detected_kind: z.enum(["word", "phrase"]),
+  gloss_cn: z.string().min(2).max(12),
+  phonetic: z.string().max(120).optional().default(""),
+  part_of_speech: z.string().max(60).optional().default(""),
+  grammar_tags: z.array(z.string().max(40)).max(3).optional().default([]),
+  definition_en: z.string().max(240).optional().default(""),
+  example_en: z.string().max(320).optional().default(""),
+  example_cn: z.string().max(160).optional().default(""),
+});
+
 type ArticleOutput = z.infer<typeof articleSchema>;
 type GlossOutput = z.infer<typeof glossSchema>;
+type InsightOutput = z.infer<typeof insightSchema>;
 
 type AiFormat = "openai" | "anthropic";
 
@@ -116,6 +147,61 @@ function truncateText(text: string, maxLength = 220) {
   const normalized = text.replace(/\s+/g, " ").trim();
   if (normalized.length <= maxLength) return normalized;
   return `${normalized.slice(0, maxLength - 1)}…`;
+}
+
+function normalizeArticleLine(line: string) {
+  return line
+    .replace(/[“”]/g, "\"")
+    .replace(/[‘’]/g, "'")
+    .replace(/[•▪●○◆◇■□▸►→※]/g, " ")
+    .replace(/[^\S\r\n]+/g, " ")
+    .replace(/\s+([,.;:!?])/g, "$1")
+    .replace(/([,.;:!?]){2,}/g, "$1")
+    .replace(/^[^A-Za-z0-9"'(]+/, "")
+    .replace(/[^A-Za-z0-9)"'.!?]+$/, "")
+    .trim();
+}
+
+function sanitizeArticleContent(raw: string) {
+  const normalized = raw
+    .replace(/\r/g, "")
+    .replace(/\\n/g, "\n")
+    .replace(/\u00a0/g, " ")
+    .trim();
+
+  const paragraphs = normalized
+    .split(/\n{2,}/)
+    .map((paragraph) =>
+      paragraph
+        .split(/\n+/)
+        .map((line) => normalizeArticleLine(line))
+        .filter(Boolean)
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim()
+    )
+    .filter((paragraph) => /[A-Za-z]/.test(paragraph));
+
+  return paragraphs.join("\n\n");
+}
+
+function sanitizeShortList(values: string[], maxItems: number) {
+  return values
+    .map((value) => value.replace(/\s+/g, " ").trim())
+    .filter(Boolean)
+    .slice(0, maxItems);
+}
+
+function sanitizeArticleOutput(result: ArticleOutput): ArticleOutput {
+  return {
+    ...result,
+    title: normalizeTitle(result.title),
+    topic: normalizeTopic(result.topic),
+    content: sanitizeArticleContent(result.content),
+    summary_cn: result.summary_cn.replace(/\s+/g, " ").trim(),
+    grammar_focus: sanitizeShortList(result.grammar_focus, 6),
+    key_vocabulary: sanitizeShortList(result.key_vocabulary, 12),
+  };
 }
 
 function maskApiKey(apiKey: string | undefined) {
@@ -406,7 +492,7 @@ export async function generateReadingArticle(input: {
           .join("\n")
       : "";
 
-  const result: ArticleOutput = await createCompatibilityJson({
+  const result = sanitizeArticleOutput(await createCompatibilityJson({
     system: ARTICLE_SYSTEM_PROMPT,
     schema: articleSchema,
     example,
@@ -424,7 +510,7 @@ export async function generateReadingArticle(input: {
     ]
       .filter(Boolean)
       .join("\n\n"),
-  });
+  }));
 
   logAiDebug("article:result", {
     title: result.title,
@@ -449,6 +535,19 @@ function cleanFastGlossRaw(raw: string): string | null {
 
   const match = normalized.match(/[\u4e00-\u9fff]{2,12}/);
   return match?.[0] ?? null;
+}
+
+function sanitizeInsightOutput(result: InsightOutput): InsightOutput {
+  return {
+    detected_kind: result.detected_kind,
+    gloss_cn: result.gloss_cn.replace(/\s+/g, " ").trim(),
+    phonetic: result.phonetic.replace(/\s+/g, " ").trim(),
+    part_of_speech: result.part_of_speech.replace(/\s+/g, " ").trim().toLowerCase(),
+    grammar_tags: sanitizeShortList(result.grammar_tags, 3),
+    definition_en: result.definition_en.replace(/\s+/g, " ").trim(),
+    example_en: result.example_en.replace(/\s+/g, " ").trim(),
+    example_cn: result.example_cn.replace(/\s+/g, " ").trim(),
+  };
 }
 
 export async function generateContextualGlossFast(input: {
@@ -517,6 +616,49 @@ export async function generateContextualGloss(input: {
     kind: input.kind,
     selectedText: input.selectedText,
     gloss: result.gloss_cn,
+  });
+
+  return result;
+}
+
+export async function generateTermInsight(input: {
+  articleTitle: string;
+  selectedText: string;
+  detectedKind: VocabEntryKind;
+  sentence: string;
+  paragraph: string;
+}) {
+  const example = JSON.stringify({
+    detected_kind: input.detectedKind,
+    gloss_cn: "专注的",
+    phonetic: "/ˈfəʊ.kəst/",
+    part_of_speech: "adjective",
+    grammar_tags: ["past participle"],
+    definition_en: "giving full attention to something",
+    example_en: "She stayed focused during the discussion.",
+    example_cn: "她在讨论中始终很专注。",
+  }, null, 2);
+
+  const result = sanitizeInsightOutput(await createCompatibilityJson({
+    system: INSIGHT_SYSTEM_PROMPT,
+    schema: insightSchema,
+    example,
+    maxTokens: 700,
+    disableThinking: true,
+    prompt: [
+      `文章标题：${input.articleTitle}`,
+      `候选类型：${input.detectedKind}`,
+      `划词内容：${input.selectedText}`,
+      `所在句子：${input.sentence}`,
+      `所在段落：${input.paragraph}`,
+    ].join("\n\n"),
+  }));
+
+  logAiDebug("insight:result", {
+    selectedText: input.selectedText,
+    detectedKind: result.detected_kind,
+    gloss: result.gloss_cn,
+    partOfSpeech: result.part_of_speech,
   });
 
   return result;

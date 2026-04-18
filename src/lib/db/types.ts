@@ -105,6 +105,12 @@ export interface VocabEntryRecord {
 	text: string;
 	normalizedText: string;
 	glossCn: string | null;
+	phonetic: string | null;
+	partOfSpeech: string | null;
+	grammarTags: string[];
+	definitionEn: string | null;
+	exampleEn: string | null;
+	exampleCn: string | null;
 	noteText: string | null;
 	masteryState: VocabMasteryState;
 	createdAt: string;
@@ -117,6 +123,9 @@ export interface VocabSummary {
 	kind: VocabEntryKind;
 	text: string;
 	glossCn: string | null;
+	phonetic: string | null;
+	partOfSpeech: string | null;
+	grammarTags: string[];
 	noteText: string | null;
 	masteryState: VocabMasteryState;
 	articleCount: number;
@@ -138,6 +147,12 @@ export interface ReadingAnnotationRecord {
 	deletedAt: string | null;
 	vocabText: string | null;
 	vocabGlossCn: string | null;
+	vocabPhonetic: string | null;
+	vocabPartOfSpeech: string | null;
+	vocabGrammarTags: string[];
+	vocabDefinitionEn: string | null;
+	vocabExampleEn: string | null;
+	vocabExampleCn: string | null;
 	vocabKind: VocabEntryKind | null;
 	vocabNoteText: string | null;
 	vocabMasteryState: VocabMasteryState | null;
@@ -158,6 +173,12 @@ export interface ReadingReviewCardRecord {
 	deletedAt: string | null;
 	vocabText: string;
 	vocabGlossCn: string | null;
+	vocabPhonetic: string | null;
+	vocabPartOfSpeech: string | null;
+	vocabGrammarTags: string[];
+	vocabDefinitionEn: string | null;
+	vocabExampleEn: string | null;
+	vocabExampleCn: string | null;
 	vocabKind: VocabEntryKind;
 	vocabNoteText: string | null;
 	vocabMasteryState: VocabMasteryState;
@@ -175,4 +196,23 @@ export interface ReviewForecast {
 	within7Days: number;
 	within30Days: number;
 	overdue: number;
+}
+
+export interface ReadingTermInsight {
+	id: string;
+	userId: string;
+	text: string;
+	normalizedText: string;
+	detectedKind: VocabEntryKind;
+	glossCn: string;
+	phonetic: string | null;
+	partOfSpeech: string | null;
+	grammarTags: string[];
+	definitionEn: string | null;
+	exampleEn: string | null;
+	exampleCn: string | null;
+	sourceSentence: string | null;
+	createdAt: string;
+	updatedAt: string;
+	fromCache: boolean;
 }

@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { Volume2, VolumeX } from "lucide-react";
 import type { ReadingStudyCard, ReviewForecast, ReviewGrade } from "@/lib/db/types";
 import ReadingHeader from "./ReadingHeader";
 import shellStyles from "./reading-shell.module.css";
 import styles from "./review-page.module.css";
+import { usePronunciation } from "./usePronunciation";
 
 const GRADE_ACTIONS: Array<{ grade: ReviewGrade; label: string; hotkey: string; tone?: "danger" | "safe" }> = [
   { grade: "again", label: "再记一遍", hotkey: "1", tone: "danger" },
@@ -21,6 +23,7 @@ export default function ReviewPage() {
   const [busy, setBusy] = useState(false);
   const [showContext, setShowContext] = useState(false);
   const dismissedCardIdsRef = useRef<Set<string>>(new Set());
+  const { speak, stop, supported, speakingText } = usePronunciation();
 
   const loadCards = useCallback(async () => {
     setLoading(true);
@@ -50,6 +53,10 @@ export default function ReviewPage() {
   useEffect(() => {
     setShowContext(false);
   }, [current?.id]);
+
+  useEffect(() => {
+    stop();
+  }, [current?.id, stop]);
 
   const gradeCurrent = useCallback(async (grade: ReviewGrade) => {
     if (!current) return;
@@ -149,8 +156,34 @@ export default function ReviewPage() {
               </header>
 
               <div className={styles.wordBlock}>
-                <h1 className={styles.word}>{current.vocabText}</h1>
+                <div className={styles.wordRow}>
+                  <h1 className={styles.word}>{current.vocabText}</h1>
+                  <button
+                    type="button"
+                    className={`${styles.pronounceBtn} ${speakingText === current.vocabText.trim() ? styles.pronounceBtnActive : ""}`}
+                    disabled={!supported}
+                    aria-label={`播放 ${current.vocabText} 的发音`}
+                    title={supported ? "播放发音" : "当前浏览器不支持发音"}
+                    onClick={() => speak(current.vocabText)}
+                  >
+                    {speakingText === current.vocabText.trim() ? (
+                      <VolumeX size={18} strokeWidth={2.2} />
+                    ) : (
+                      <Volume2 size={18} strokeWidth={2.2} />
+                    )}
+                  </button>
+                </div>
                 <p className={styles.gloss}>{current.vocabGlossCn || "暂未生成中文释义"}</p>
+                {current.vocabPhonetic || current.vocabPartOfSpeech || current.vocabGrammarTags.length ? (
+                  <div className={styles.metaRow}>
+                    {current.vocabPhonetic ? <span className={styles.metaChip}>{current.vocabPhonetic}</span> : null}
+                    {current.vocabPartOfSpeech ? <span className={styles.metaChip}>{current.vocabPartOfSpeech}</span> : null}
+                    {current.vocabGrammarTags.map((tag) => (
+                      <span key={tag} className={styles.metaChip}>{tag}</span>
+                    ))}
+                  </div>
+                ) : null}
+                {current.vocabDefinitionEn ? <p className={styles.definition}>{current.vocabDefinitionEn}</p> : null}
               </div>
 
               <button
@@ -163,6 +196,12 @@ export default function ReviewPage() {
 
               {showContext ? (
                 <section className={styles.contextSection}>
+                  {current.vocabExampleEn ? (
+                    <div className={styles.exampleBlock}>
+                      <p>{current.vocabExampleEn}</p>
+                      {current.vocabExampleCn ? <p className={styles.exampleCn}>{current.vocabExampleCn}</p> : null}
+                    </div>
+                  ) : null}
                   <p className={styles.contextText}>{current.contextSnippet || "暂无上下文片段"}</p>
                   {current.contextReadingItemId ? (
                     <Link

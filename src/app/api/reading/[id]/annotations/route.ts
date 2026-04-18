@@ -5,12 +5,13 @@ import { generateContextualGloss, generateContextualGlossFast } from "@/lib/ai/r
 import {
   createReadingAnnotationForUser,
   createReviewCardForVocabEntry,
+  getReadingTermInsightByNormalizedTextForUser,
   getReadingItemByIdForUser,
   listReadingAnnotationsForItem,
   updateVocabEntryForUser,
   upsertVocabEntryForUser,
 } from "@/lib/db/queries";
-import { normalizeSelectedText, type ReadingAnnotationKind } from "@/components/reading/readingUtils";
+import { normalizeSelectedText, normalizeVocabText, type ReadingAnnotationKind } from "@/components/reading/readingUtils";
 
 type Params = { params: Promise<{ id: string }> };
 const VALID_KINDS = new Set<ReadingAnnotationKind>(["word", "phrase"]);
@@ -92,6 +93,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   const paragraph = item.contentText.slice(paragraphBounds.start, paragraphBounds.end).trim();
 
   let vocabEntryId: string | null = null;
+  const normalizedText = normalizeVocabText(selectedText);
 
   if (kind === "word" || kind === "phrase") {
     const vocabResult = await upsertVocabEntryForUser(session.user.id, {
@@ -107,7 +109,30 @@ export async function POST(req: NextRequest, { params }: Params) {
     vocabEntryId = vocabResult.entry.id;
     await createReviewCardForVocabEntry(session.user.id, vocabEntryId);
 
-    if (!vocabResult.entry.glossCn && sentence && vocabEntryId) {
+    const insight = body.insight && typeof body.insight === "object"
+      ? body.insight as Record<string, unknown>
+      : null;
+
+    const cachedInsight = normalizedText
+      ? await getReadingTermInsightByNormalizedTextForUser(session.user.id, normalizedText)
+      : null;
+
+    const resolvedInsight = insight ?? cachedInsight;
+    if (resolvedInsight && vocabEntryId) {
+      await updateVocabEntryForUser(vocabEntryId, session.user.id, {
+        glossCn: typeof resolvedInsight.glossCn === "string" ? resolvedInsight.glossCn : cachedInsight?.glossCn ?? null,
+        phonetic: typeof resolvedInsight.phonetic === "string" ? resolvedInsight.phonetic || null : cachedInsight?.phonetic ?? null,
+        partOfSpeech: typeof resolvedInsight.partOfSpeech === "string" ? resolvedInsight.partOfSpeech || null : cachedInsight?.partOfSpeech ?? null,
+        grammarTags: Array.isArray(resolvedInsight.grammarTags)
+          ? resolvedInsight.grammarTags.filter((tag): tag is string => typeof tag === "string")
+          : cachedInsight?.grammarTags ?? [],
+        definitionEn: typeof resolvedInsight.definitionEn === "string" ? resolvedInsight.definitionEn || null : cachedInsight?.definitionEn ?? null,
+        exampleEn: typeof resolvedInsight.exampleEn === "string" ? resolvedInsight.exampleEn || null : cachedInsight?.exampleEn ?? null,
+        exampleCn: typeof resolvedInsight.exampleCn === "string" ? resolvedInsight.exampleCn || null : cachedInsight?.exampleCn ?? null,
+      });
+    }
+
+    if (!vocabResult.entry.glossCn && !resolvedInsight && sentence && vocabEntryId) {
       const userId = session.user.id;
       const glossVocabId = vocabEntryId;
       after(async () => {
