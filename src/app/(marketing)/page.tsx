@@ -1,22 +1,12 @@
+import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
-import { getUpcomingTasksForUser } from "@/lib/db/queries";
-import HomePage from "./HomePage";
 
-export const metadata = {
-  title: "Pixelverse",
-  description: "像素宇宙，探索从这里开始",
-};
-
-export default async function MarketingPage() {
+export default async function HomePage() {
   const session = await auth();
-  const userId = session?.user?.id;
 
-  const upcomingTasks = userId ? await getUpcomingTasksForUser(userId, 7) : [];
+  if (session?.user?.id) {
+    redirect("/notes");
+  }
 
-  return (
-    <HomePage
-      isAuthenticated={Boolean(userId)}
-      upcomingTasks={upcomingTasks}
-    />
-  );
+  redirect("/login");
 }

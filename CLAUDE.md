@@ -1,6 +1,6 @@
 # Pixelverse
 
-像素风创作站点，基于 Next.js App Router 全栈架构。
+像素风云笔记，基于 Next.js App Router 全栈架构。
 
 ## 技术栈
 
@@ -17,36 +17,27 @@
 ```
 src/
 ├── app/
-│   ├── (marketing)/          # 营销首页 (route group，不影响URL)
-│   │   ├── page.tsx          # 服务端入口，渲染 HomePage
-│   │   ├── HomePage.tsx      # 客户端组件：英雄区、实时时钟
-│   │   └── HomePage.module.css
+│   ├── (marketing)/          # 首页入口 (route group，不影响URL)
+│   │   └── page.tsx          # 已登录重定向 /notes，未登录重定向 /login
 │   ├── api/
 │   │   ├── auth/[...nextauth]/route.ts   # Auth.js 处理器
 │   │   ├── notes/route.ts                # GET 列表(支持 ?query= 搜索) / POST 新建
 │   │   ├── notes/[id]/route.ts           # GET / PATCH / DELETE 单条笔记
+│   │   ├── notes/trash/route.ts          # 回收站列表
+│   │   ├── notes/[id]/restore/route.ts   # 恢复笔记
+│   │   ├── notes/[id]/permanent/route.ts # 永久删除
 │   │   └── upload/route.ts               # POST 图片上传
 │   ├── login/
-│   │   ├── page.tsx          # 登录页（已登录则重定向到 /）
+│   │   ├── page.tsx          # 登录页（已登录则重定向到 /notes）
 │   │   └── LoginForm.tsx     # 客户端登录表单
 │   ├── notes/
 │   │   └── page.tsx          # 受保护的云笔记工作区入口
-│   ├── tasks/
-│   │   └── page.tsx          # 受保护的任务队列入口
 │   ├── layout.tsx            # 根布局，加载字体
 │   └── globals.css           # 全局样式、CSS 变量、动画定义
 ├── components/
-│   ├── notes/
-│   │   ├── NotesPage.tsx     # 主编辑器组件 (~660行)：侧栏 + Tiptap 编辑器 + 工具栏
-│   │   └── NotesPage.module.css
-│   ├── tasks/
-│   │   ├── TasksPage.tsx     # 任务管理主组件：筛选栏 + 任务列表 + 内联表单
-│   │   ├── tasks.module.css
-│   │   ├── ReminderPanel.tsx # 首页侧边提醒面板
-│   │   └── reminder.module.css
-│   └── pet/
-│       ├── PixelCat.tsx      # 底部浮动像素幽灵猫吉祥物
-│       └── PixelCat.module.css
+│   └── notes/
+│       ├── NotesPage.tsx     # 主编辑器组件：侧栏 + Tiptap 编辑器 + 工具栏
+│       └── notes.module.css
 ├── lib/
 │   ├── auth/
 │   │   ├── index.ts          # NextAuth 配置 (Credentials provider, JWT callbacks)
@@ -56,8 +47,7 @@ src/
 │       └── queries.ts        # 所有 SQL 查询函数 (用户/笔记 CRUD)
 ├── __tests__/                # Vitest 测试
 │   ├── setup.ts
-│   ├── pixel-cat.test.ts     # 14 个精灵/尺寸测试
-│   └── notes-api.test.ts     # 16 个 API/安全测试
+│   └── notes-api.test.ts     # API/安全测试
 ├── types/
 │   └── next-auth.d.ts        # NextAuth 类型扩展
 └── middleware.ts              # 路由保护：/notes/**, /api/notes/**, /api/upload
@@ -76,8 +66,9 @@ npm run build        # 生产构建
 npm run test         # 运行测试 (vitest run)
 npm run test:watch   # 监听模式测试
 npm run lint         # ESLint 检查
-npm run db:setup     # 初始化数据库 (push + seed)
+npm run db:setup     # 初始化数据库 (push + migrate + seed)
 npm run db:push      # 执行 sql/schema.sql
+npm run db:migrate   # 执行 migrations/
 npm run db:seed      # 创建开发账号 admin/123456
 ```
 
@@ -87,7 +78,7 @@ npm run db:seed      # 创建开发账号 admin/123456
 
 - 使用 Next.js App Router，页面在 `src/app/` 下
 - 服务端组件作为页面入口 (`page.tsx`)，交互逻辑放在客户端组件 (`"use client"`)
-- 路由组 `(marketing)` 用于首页，不影响 URL 路径
+- `/` 根据登录状态重定向到 `/notes` 或 `/login`
 - 受保护路由由 `middleware.ts` 统一拦截，不需要在页面内重复检查
 
 ### API 设计
@@ -98,12 +89,9 @@ npm run db:seed      # 创建开发账号 admin/123456
   - `GET /api/notes?query=xxx` — 列表 + 搜索
   - `POST /api/notes` — 新建
   - `GET/PATCH/DELETE /api/notes/[id]` — 单条操作
-- 任务 API 模式:
-  - `GET /api/tasks?tag=&priority=&status=` — 列表 + 筛选
-  - `POST /api/tasks` — 新建
-  - `GET /api/tasks/upcoming?days=7` — 即将到期的任务
-  - `GET/PATCH/DELETE /api/tasks/[id]` — 单条操作
-  - `POST /api/tasks/[id]/toggle` — 切换完成状态
+  - `GET /api/notes/trash` — 回收站
+  - `POST /api/notes/[id]/restore` — 恢复
+  - `DELETE /api/notes/[id]/permanent` — 永久删除
 - DELETE 是软删除 (设置 `deleted_at` 时间戳)
 - 返回格式统一为 JSON，错误使用 `{ error: string }`
 
@@ -165,16 +153,9 @@ npm run db:seed      # 创建开发账号 admin/123456
 
 ## 已实现功能
 
-- [x] 营销首页: 英雄区 + 实时时钟 + 导航
 - [x] 认证系统: 登录表单 + Credentials 验证 + JWT session + 中间件保护
-- [x] 云笔记: CRUD + 富文本编辑 + 自动保存 + 搜索 + 软删除 + 字符计数
+- [x] 云笔记: CRUD + 富文本编辑 + 自动保存 + 搜索 + 软删除 + 回收站 + 字符计数
 - [x] 图片上传: 拖放/粘贴/按钮 + 客户端&服务端校验 + 本地存储
-- [x] 像素猫吉祥物: SVG 像素画 + 浮动动画 + 思考泡泡 + 点击交互 + 闪烁效果
-- [x] 任务队列: CRUD + 优先级 + 标签 + 截止日期 + 筛选 + 首页侧边提醒面板
-
-## 规划中的功能
-
-- 待定
 
 ## 注意事项
 
@@ -182,6 +163,4 @@ npm run db:seed      # 创建开发账号 admin/123456
 - `.env.local` 不提交到仓库，包含 AUTH_SECRET、DATABASE_URL 等敏感配置
 - 表结构变更统一修改 `sql/schema.sql`，不要直接改线上库
 - `middleware.ts` 中的 matcher 决定哪些路由受保护，新增受保护路由需更新
-- 任务标签使用逗号分隔字符串存储（`tags VARCHAR(500)`），查询时用 `FIND_IN_SET`
-- 首页提醒面板的天数阈值存储在 `localStorage`（key: `pixelverse_reminder_days`），默认 7 天
 - Path alias: `@/*` 映射到 `./src/*`

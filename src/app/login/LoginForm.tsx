@@ -32,7 +32,7 @@ export default function LoginForm() {
       return;
     }
 
-    router.replace("/");
+    router.replace("/notes");
     router.refresh();
   };
 
@@ -49,7 +49,7 @@ export default function LoginForm() {
             <strong>Pixelverse</strong>
           </Link>
           <h1>登录</h1>
-          <p>登录后回到首页，继续进入你的工作区。</p>
+          <p>登录后进入云笔记工作区。</p>
           {isDev ? (
             <p className={styles.devHint}>
               <span className={styles.devDot} />
@@ -93,7 +93,7 @@ export default function LoginForm() {
         </form>
 
         <div className={styles.footer}>
-          <Link href="/">← 返回首页</Link>
+          <Link href="/notes">← 云笔记</Link>
         </div>
       </div>
     </main>

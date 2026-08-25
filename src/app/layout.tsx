@@ -19,7 +19,7 @@ const jetbrainsMono = localFont({
 
 export const metadata: Metadata = {
   title: "Pixelverse",
-  description: "像素宇宙，创意工坊",
+  description: "像素风云笔记",
   icons: {
     icon: "/favicon.svg",
   },
